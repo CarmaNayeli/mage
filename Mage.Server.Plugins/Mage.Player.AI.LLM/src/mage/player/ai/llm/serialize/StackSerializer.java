@@ -40,7 +40,7 @@ public final class StackSerializer {
             JsonArray targets = new JsonArray();
             for (Target target : ability.getTargets()) {
                 for (UUID targetId : target.getTargets()) {
-                    targets.add(describeTarget(targetId, game));
+                    targets.add(Describe.name(targetId, game));
                 }
             }
             if (targets.size() > 0) {
@@ -50,15 +50,5 @@ public final class StackSerializer {
             stack.add(obj);
         }
         return stack;
-    }
-
-    private static String describeTarget(UUID id, Game game) {
-        if (game.getPlayer(id) != null) {
-            return game.getPlayer(id).getName();
-        }
-        if (game.getObject(id) != null) {
-            return game.getObject(id).getName();
-        }
-        return Ids.permanentId(id);
     }
 }

@@ -41,8 +41,8 @@ public class GameStateSerializerSmokeTest extends CardTestCommander4Players {
         addCard(Zone.BATTLEFIELD, playerD, "Grave Pact", 1);
 
         runCode("dump full envelope", 1, PhaseStep.POSTCOMBAT_MAIN, playerA, (info, player, game) -> {
-            JsonObject envelope = GameStateSerializer.serialize(
-                    game, player, "priority", "You have priority.", "", Collections.emptyList());
+            JsonObject envelope = GameStateSerializer.serializePriority(
+                    game, player, "You have priority.", "", Collections.emptyList());
             System.out.println("=== full envelope (PlayerA) ===");
             System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(envelope));
         });

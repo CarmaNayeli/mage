@@ -29,9 +29,8 @@ public class AttackOptionEnumeratorSmokeTest extends CardTestCommander4Players {
         addCard(Zone.BATTLEFIELD, playerD, "Swamp", 1);
 
         runCode("dump declare_attackers options", 1, PhaseStep.DECLARE_ATTACKERS, playerA, (info, player, game) -> {
-            JsonObject envelope = GameStateSerializer.serialize(
-                    game, player, "declare_attackers", "Declare attackers for combat.",
-                    "", Collections.emptyList());
+            JsonObject envelope = GameStateSerializer.serializeDeclareAttackers(
+                    game, player, "Declare attackers for combat.", "", Collections.emptyList());
             System.out.println("=== decision.options (declare_attackers, PlayerA) ===");
             System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(envelope.get("decision")));
         });

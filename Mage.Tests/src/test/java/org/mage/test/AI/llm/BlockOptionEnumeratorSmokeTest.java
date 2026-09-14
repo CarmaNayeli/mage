@@ -30,9 +30,8 @@ public class BlockOptionEnumeratorSmokeTest extends CardTestCommander4Players {
         attack(1, playerA, "Hill Giant", playerB);
 
         runCode("dump declare_blockers options", 1, PhaseStep.DECLARE_BLOCKERS, playerB, (info, player, game) -> {
-            JsonObject envelope = GameStateSerializer.serialize(
-                    game, player, "declare_blockers", "Declare blockers for combat.",
-                    "", Collections.emptyList());
+            JsonObject envelope = GameStateSerializer.serializeDeclareBlockers(
+                    game, player, "Declare blockers for combat.", "", Collections.emptyList());
             System.out.println("=== decision.options (declare_blockers, PlayerB) ===");
             System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(envelope.get("decision")));
         });

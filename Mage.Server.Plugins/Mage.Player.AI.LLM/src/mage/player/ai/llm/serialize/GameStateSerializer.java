@@ -2,8 +2,11 @@ package mage.player.ai.llm.serialize;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import mage.abilities.Ability;
+import mage.abilities.Modes;
 import mage.game.Game;
 import mage.players.Player;
+import mage.target.Target;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,13 +18,14 @@ import java.util.UUID;
 /**
  * Top-level assembler for the request envelope in xmage-llm-bridge-design.md.
  * <p>
- * {@code decision.options} is only populated for decision types that have an
- * enumerator wired up so far ("priority" - see {@link PriorityOptionEnumerator});
- * everything else (selectAttackers, selectBlockers, chooseTarget, ...) still gets an
- * empty options array pending its own enumerator, since each XMage decision method
- * needs its own mapping into indexed Option objects. Doesn't call an LLM. {@code notes}
- * and {@code history} are threaded through from whatever the caller has stored between
- * calls - this class doesn't own that state.
+ * One factory method per decision type, since each needs different extra context
+ * beyond game+you: priority/declare_attackers/declare_blockers are fully derivable
+ * from game state alone, but chooseTarget/chooseUse/chooseMode are called mid-
+ * resolution of a specific ability and need that ability (and its Target/Modes) passed
+ * in. All of them share the same you/opponents/stack/turn/glossary/notes/history
+ * assembly. Doesn't call an LLM. {@code notes} and {@code history} are threaded
+ * through from whatever the caller has stored between calls - this class doesn't own
+ * that state.
  *
  * @author CarmaNayeli
  */
@@ -30,25 +34,83 @@ public final class GameStateSerializer {
     private GameStateSerializer() {
     }
 
-    public static JsonObject serialize(Game game, Player you, String decisionType, String decisionPrompt,
-                                        String notes, List<String> history) {
-        Glossary glossary = new Glossary();
+    public static JsonObject serializePriority(Game game, Player you, String prompt, String notes, List<String> history) {
         Map<UUID, Integer> seats = assignSeats(game);
+        JsonObject decision = decisionObject("priority", prompt, PriorityOptionEnumerator.enumerate(you, game, seats));
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
+    public static JsonObject serializeDeclareAttackers(Game game, Player you, String prompt, String notes, List<String> history) {
+        Map<UUID, Integer> seats = assignSeats(game);
+        JsonArray options = AttackOptionEnumerator.enumerate(game, you.getId(), seats);
+        JsonObject decision = decisionObject("declare_attackers", prompt, options);
+        addMultiSelectBounds(decision, options);
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
+    public static JsonObject serializeDeclareBlockers(Game game, Player you, String prompt, String notes, List<String> history) {
+        Map<UUID, Integer> seats = assignSeats(game);
+        JsonArray options = BlockOptionEnumerator.enumerate(game, you.getId());
+        JsonObject decision = decisionObject("declare_blockers", prompt, options);
+        addMultiSelectBounds(decision, options);
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
+    /**
+     * @param source the ability currently resolving/being cast - already carries the
+     *               Target being filled in, per XMage's own chooseTarget(..., Target,
+     *               Ability source, ...) call shape
+     */
+    public static JsonObject serializeChooseTarget(Game game, Player you, Ability source, Target target,
+                                                    String prompt, String notes, List<String> history) {
+        Map<UUID, Integer> seats = assignSeats(game);
+        JsonArray options = ChooseTargetOptionEnumerator.enumerate(game, you.getId(), source, target);
+        JsonObject decision = decisionObject("choose_target", prompt, options);
+        decision.addProperty("min_choices", target.getMinNumberOfTargets());
+        decision.addProperty("max_choices", target.getMaxNumberOfTargets());
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
+    public static JsonObject serializeChooseUse(Game game, Player you, String message, String notes, List<String> history) {
+        Map<UUID, Integer> seats = assignSeats(game);
+        JsonObject decision = decisionObject("choose_use", message, ChooseUseOptionEnumerator.enumerate());
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
+    public static JsonObject serializeChooseMode(Game game, Player you, Ability source, Modes modes,
+                                                  String prompt, String notes, List<String> history) {
+        Map<UUID, Integer> seats = assignSeats(game);
+        JsonArray options = ModeOptionEnumerator.enumerate(modes);
+        JsonObject decision = decisionObject("choose_mode", prompt, options);
+        decision.addProperty("min_choices", modes.getMinModes());
+        decision.addProperty("max_choices", modes.getMaxModes(game, source));
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
+    private static JsonObject decisionObject(String type, String prompt, JsonArray options) {
+        JsonObject decision = new JsonObject();
+        decision.addProperty("type", type);
+        decision.addProperty("prompt", prompt);
+        decision.add("options", options);
+        return decision;
+    }
+
+    /**
+     * min/max here are informational, not enforced by this class - see
+     * OptionSelectionValidator for the actual mutual-exclusion check applied to a
+     * model's selected indices before execution.
+     */
+    private static void addMultiSelectBounds(JsonObject decision, JsonArray options) {
+        decision.addProperty("min_choices", 0);
+        decision.addProperty("max_choices", countDistinctSources(options));
+    }
+
+    private static JsonObject assembleEnvelope(Game game, Player you, Map<UUID, Integer> seats, JsonObject decision,
+                                                String notes, List<String> history) {
+        Glossary glossary = new Glossary();
 
         JsonObject envelope = new JsonObject();
         envelope.addProperty("schema", 1);
-
-        JsonArray options = enumerateOptions(decisionType, you, game, seats);
-        JsonObject decision = new JsonObject();
-        decision.addProperty("type", decisionType);
-        decision.addProperty("prompt", decisionPrompt);
-        decision.add("options", options);
-        if ("declare_attackers".equals(decisionType) || "declare_blockers".equals(decisionType)) {
-            // min/max are informational, not enforced here - see the enumerators'
-            // notes on mutual exclusion between options sharing the same source creature
-            decision.addProperty("min_choices", 0);
-            decision.addProperty("max_choices", countDistinctSources(options));
-        }
         envelope.add("decision", decision);
 
         envelope.add("you", PlayerStateSerializer.serializeYou(you, game, seats, glossary));
@@ -86,24 +148,17 @@ public final class GameStateSerializer {
         return envelope;
     }
 
-    private static JsonArray enumerateOptions(String decisionType, Player you, Game game, Map<UUID, Integer> seats) {
-        switch (decisionType) {
-            case "priority":
-                return PriorityOptionEnumerator.enumerate(you, game, seats);
-            case "declare_attackers":
-                return AttackOptionEnumerator.enumerate(game, you.getId(), seats);
-            case "declare_blockers":
-                return BlockOptionEnumerator.enumerate(game, you.getId());
-            default:
-                return new JsonArray();
-        }
-    }
-
     private static int countDistinctSources(JsonArray options) {
-        return (int) java.util.stream.StreamSupport.stream(options.spliterator(), false)
-                .map(option -> option.getAsJsonObject().get("source").getAsString())
-                .distinct()
-                .count();
+        int count = 0;
+        List<String> seenSources = new ArrayList<>();
+        for (com.google.gson.JsonElement element : options) {
+            String source = element.getAsJsonObject().get("source").getAsString();
+            if (!seenSources.contains(source)) {
+                seenSources.add(source);
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
