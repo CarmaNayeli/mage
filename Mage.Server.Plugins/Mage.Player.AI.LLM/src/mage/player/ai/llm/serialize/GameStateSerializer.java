@@ -77,6 +77,19 @@ public final class GameStateSerializer {
         return assembleEnvelope(game, you, seats, decision, notes, history);
     }
 
+    /**
+     * The caller is responsible for capping {@code max - min} before calling this -
+     * one option per integer stops being a sane contract past a few dozen values.
+     */
+    public static JsonObject serializeAnnounceX(Game game, Player you, String prompt, int min, int max,
+                                                 String notes, List<String> history) {
+        Map<UUID, Integer> seats = assignSeats(game);
+        JsonObject decision = decisionObject("announce_x", prompt, AnnounceXOptionEnumerator.enumerate(min, max));
+        decision.addProperty("min_choices", 1);
+        decision.addProperty("max_choices", 1);
+        return assembleEnvelope(game, you, seats, decision, notes, history);
+    }
+
     public static JsonObject serializeChooseMode(Game game, Player you, Ability source, Modes modes,
                                                   String prompt, String notes, List<String> history) {
         Map<UUID, Integer> seats = assignSeats(game);

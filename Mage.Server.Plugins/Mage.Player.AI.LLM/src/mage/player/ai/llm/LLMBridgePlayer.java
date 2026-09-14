@@ -24,6 +24,7 @@ import mage.game.tournament.Tournament;
 import mage.player.ai.ComputerPlayer;
 import mage.player.ai.llm.client.LLMDecisionClient;
 import mage.player.ai.llm.client.LLMDecisionResponse;
+import mage.player.ai.llm.serialize.AnnounceXOptionEnumerator;
 import mage.player.ai.llm.serialize.AttackOptionEnumerator;
 import mage.player.ai.llm.serialize.BlockOptionEnumerator;
 import mage.player.ai.llm.serialize.ChooseTargetOptionEnumerator;
@@ -56,12 +57,13 @@ import java.util.stream.Collectors;
  * <p>
  * Wired to the escalation policy's "route to the model" list: {@link #priority},
  * {@link #selectAttackers}, {@link #selectBlockers}, {@link #chooseMode}, a targeted
- * subset of {@link #chooseTarget(Outcome, Target, Ability, Game)}, and both
- * {@code chooseUse} overloads. Everything else - mana payment, trigger ordering,
- * identical-object choices, scry/surveil - still falls straight to
- * {@link ComputerPlayer}, per the design doc's escalation policy. Every overridable
- * decision method keeps its call counter regardless of whether it escalates; read
- * {@link #printCallCounts()} to see the actual call mix from a played game.
+ * subset of {@link #chooseTarget(Outcome, Target, Ability, Game)}, both
+ * {@code chooseUse} overloads, and the judgment-call half of {@link #announceX}.
+ * Everything else - mana payment, trigger ordering, identical-object choices,
+ * scry/surveil - still falls straight to {@link ComputerPlayer}, per the design doc's
+ * escalation policy. Every overridable decision method keeps its call counter
+ * regardless of whether it escalates; read {@link #printCallCounts()} to see the
+ * actual call mix from a played game.
  * <p>
  * A call to the LLM can fail (no API key, network error, malformed response) - that's
  * a real, expected failure mode of an external HTTP dependency, not a bug. Every
@@ -74,6 +76,13 @@ public class LLMBridgePlayer extends ComputerPlayer {
 
     private static final Logger logger = Logger.getLogger(LLMBridgePlayer.class);
     private static final int MAX_HISTORY_ENTRIES = 20;
+
+    /**
+     * Above this span, one option per integer stops being a sane envelope (a Fireball
+     * off a deep mana pool could legally announce X in the hundreds) - falls back to
+     * ComputerPlayer's own heuristic rather than dumping an enormous options list.
+     */
+    private static final int MAX_ANNOUNCE_X_OPTIONS = 20;
 
     private static final Map<String, LongAdder> callCounts = new ConcurrentHashMap<>();
 
@@ -296,10 +305,32 @@ public class LLMBridgePlayer extends ComputerPlayer {
         return super.playMana(ability, unpaid, promptText, game);
     }
 
+    /**
+     * Design doc's "announceXMana": the judgment-call X (how much a Fireball hits
+     * for, how many creatures a kicker makes), not the mana-payment X ("how much
+     * mana do you want to spend here") - that one keeps {@code isManaPay == true} and
+     * stays on the free ComputerPlayer path per the escalation policy.
+     */
     @Override
     public int announceX(int min, int max, String message, Game game, Ability source, boolean isManaPay) {
         logCall("announceX");
-        return super.announceX(min, max, message, game, source, isManaPay);
+        if (isManaPay || max < min || (max - min) > MAX_ANNOUNCE_X_OPTIONS) {
+            return super.announceX(min, max, message, game, source, isManaPay);
+        }
+
+        JsonObject envelope = GameStateSerializer.serializeAnnounceX(
+                game, this, message, min, max, notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            return super.announceX(min, max, message, game, source, isManaPay);
+        }
+
+        Integer chosen = AnnounceXOptionEnumerator.resolve(min, max, maybe.get().choice());
+        if (chosen == null) {
+            return super.announceX(min, max, message, game, source, isManaPay);
+        }
+        recordHistory(game, "announced X = " + chosen + " for " + message);
+        return chosen;
     }
 
     @Override
