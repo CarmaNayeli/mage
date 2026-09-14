@@ -38,10 +38,17 @@ public final class GameStateSerializer {
         JsonObject envelope = new JsonObject();
         envelope.addProperty("schema", 1);
 
+        JsonArray options = enumerateOptions(decisionType, you, game, seats);
         JsonObject decision = new JsonObject();
         decision.addProperty("type", decisionType);
         decision.addProperty("prompt", decisionPrompt);
-        decision.add("options", enumerateOptions(decisionType, you, game, seats));
+        decision.add("options", options);
+        if ("declare_attackers".equals(decisionType)) {
+            // min/max are informational, not enforced here - see AttackOptionEnumerator's
+            // note on mutual exclusion between options sharing the same source creature
+            decision.addProperty("min_choices", 0);
+            decision.addProperty("max_choices", countDistinctSources(options));
+        }
         envelope.add("decision", decision);
 
         envelope.add("you", PlayerStateSerializer.serializeYou(you, game, seats, glossary));
@@ -80,10 +87,21 @@ public final class GameStateSerializer {
     }
 
     private static JsonArray enumerateOptions(String decisionType, Player you, Game game, Map<UUID, Integer> seats) {
-        if ("priority".equals(decisionType)) {
-            return PriorityOptionEnumerator.enumerate(you, game, seats);
+        switch (decisionType) {
+            case "priority":
+                return PriorityOptionEnumerator.enumerate(you, game, seats);
+            case "declare_attackers":
+                return AttackOptionEnumerator.enumerate(game, you.getId(), seats);
+            default:
+                return new JsonArray();
         }
-        return new JsonArray();
+    }
+
+    private static int countDistinctSources(JsonArray options) {
+        return (int) java.util.stream.StreamSupport.stream(options.spliterator(), false)
+                .map(option -> option.getAsJsonObject().get("source").getAsString())
+                .distinct()
+                .count();
     }
 
     /**
