@@ -15,11 +15,12 @@ import java.util.UUID;
 /**
  * Top-level assembler for the request envelope in xmage-llm-bridge-design.md.
  * <p>
- * Scope note: this builds everything except {@code decision.options} (the "engine
- * enumerates" side of principle 2 - each decision type needs its own mapping from
- * XMage's selectAttackers/selectBlockers/chooseTarget/etc. into indexed Option
- * objects, which is a separate feature) and doesn't call an LLM. {@code notes} and
- * {@code history} are threaded through from whatever the caller has stored between
+ * {@code decision.options} is only populated for decision types that have an
+ * enumerator wired up so far ("priority" - see {@link PriorityOptionEnumerator});
+ * everything else (selectAttackers, selectBlockers, chooseTarget, ...) still gets an
+ * empty options array pending its own enumerator, since each XMage decision method
+ * needs its own mapping into indexed Option objects. Doesn't call an LLM. {@code notes}
+ * and {@code history} are threaded through from whatever the caller has stored between
  * calls - this class doesn't own that state.
  *
  * @author CarmaNayeli
@@ -40,7 +41,7 @@ public final class GameStateSerializer {
         JsonObject decision = new JsonObject();
         decision.addProperty("type", decisionType);
         decision.addProperty("prompt", decisionPrompt);
-        decision.add("options", new JsonArray()); // enumeration bridge not built yet
+        decision.add("options", enumerateOptions(decisionType, you, game, seats));
         envelope.add("decision", decision);
 
         envelope.add("you", PlayerStateSerializer.serializeYou(you, game, seats, glossary));
@@ -76,6 +77,13 @@ public final class GameStateSerializer {
         envelope.add("history", historyArray);
 
         return envelope;
+    }
+
+    private static JsonArray enumerateOptions(String decisionType, Player you, Game game, Map<UUID, Integer> seats) {
+        if ("priority".equals(decisionType)) {
+            return PriorityOptionEnumerator.enumerate(you, game, seats);
+        }
+        return new JsonArray();
     }
 
     /**
