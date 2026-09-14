@@ -8,6 +8,10 @@ import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.TextBlockParam;
 import com.google.gson.JsonObject;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Optional;
 
@@ -25,11 +29,11 @@ import java.util.Optional;
  * {@link #tierFor}: declare_blockers and choose_target route to the economy model
  * (mechanical, little political weight), everything else to the primary model.
  * <p>
- * Not yet wired into {@link mage.player.ai.llm.LLMBridgePlayer}'s decision methods -
- * those still delegate to ComputerPlayer. This class is ready to call, but doing so
- * needs a real ANTHROPIC_API_KEY, which this environment doesn't have; wiring it into
- * the hot path before it's been exercised against a real response risks breaking the
- * player's already-verified gameplay behavior.
+ * The no-arg constructor takes {@code ANTHROPIC_API_KEY} from the real process
+ * environment first ({@link AnthropicOkHttpClient#fromEnv()}'s own behavior), falling
+ * back to a plain {@code ANTHROPIC_API_KEY=...} line in a {@code .env} file (see
+ * {@link #readApiKeyFromDotEnv}) - {@code .env} is already in this repo's
+ * {@code .gitignore}, but nothing previously read it.
  *
  * @author CarmaNayeli
  */
@@ -74,13 +78,65 @@ public final class LLMDecisionClient {
     private final String economyModel;
 
     public LLMDecisionClient() {
-        this(AnthropicOkHttpClient.fromEnv(), "claude-opus-5", "claude-haiku-4-5");
+        this(buildClientFromEnvironment(), "claude-opus-5", "claude-haiku-4-5");
     }
 
     public LLMDecisionClient(AnthropicClient client, String primaryModel, String economyModel) {
         this.client = client;
         this.primaryModel = primaryModel;
         this.economyModel = economyModel;
+    }
+
+    private static AnthropicClient buildClientFromEnvironment() {
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        if (apiKey == null || apiKey.isEmpty()) {
+            apiKey = readApiKeyFromDotEnv();
+        }
+        return apiKey != null
+                ? AnthropicOkHttpClient.builder().apiKey(apiKey).build()
+                : AnthropicOkHttpClient.fromEnv();
+    }
+
+    /**
+     * Searches the working directory and its parents for a {@code .env} file, so this
+     * works the same whether the server/tests are launched from the repo root or a
+     * module subdirectory - one file at the repo root covers both. No dotenv library
+     * dependency for one key=value line.
+     */
+    private static String readApiKeyFromDotEnv() {
+        File dir = new File(".").getAbsoluteFile();
+        for (int i = 0; i < 8 && dir != null; i++, dir = dir.getParentFile()) {
+            File envFile = new File(dir, ".env");
+            if (envFile.isFile()) {
+                String value = readDotEnvValue(envFile, "ANTHROPIC_API_KEY");
+                if (value != null) {
+                    return value;
+                }
+            }
+        }
+        return null;
+    }
+
+    static String readDotEnvValue(File envFile, String key) {
+        try {
+            for (String line : Files.readAllLines(envFile.toPath(), StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                int equals = trimmed.indexOf('=');
+                if (trimmed.isEmpty() || trimmed.startsWith("#") || equals <= 0
+                        || !trimmed.substring(0, equals).trim().equals(key)) {
+                    continue;
+                }
+                String value = trimmed.substring(equals + 1).trim();
+                if (value.length() >= 2 && (value.charAt(0) == '"' || value.charAt(0) == '\'')
+                        && value.charAt(value.length() - 1) == value.charAt(0)) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                return value.isEmpty() ? null : value;
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        return null;
     }
 
     public static ModelTier tierFor(String decisionType) {
