@@ -131,6 +131,11 @@ public class TestPlayer implements Player {
         computerPlayer.setTestPlayerLink(this);
     }
 
+    public TestPlayer(mage.player.ai.llm.LLMBridgePlayer computerPlayer) {
+        this.computerPlayer = computerPlayer;
+        AIPlayer = false;
+    }
+
     public TestPlayer(TestComputerPlayer7 computerPlayer) {
         this.computerPlayer = computerPlayer;
         AIPlayer = false;
