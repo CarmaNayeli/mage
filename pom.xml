@@ -241,6 +241,7 @@
         <module>Mage</module>
         <module>Mage.Common</module>
         <module>Mage.Server</module>
+        <module>Web.Gateway</module>
         <module>Mage.Sets</module>
         <module>Mage.Client</module>
         <module>Mage.Plugins</module>
