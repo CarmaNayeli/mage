@@ -13,12 +13,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Covers {@link LLMDecisionClient#readDotEnvValue} - the fallback for when
- * {@code ANTHROPIC_API_KEY} isn't set as a real environment variable, added because
+ * Covers {@link DotEnv#readDotEnvValue} - the fallback for when a config value (the
+ * API key, a model override) isn't set as a real environment variable, added because
  * this parsing logic is exactly the kind of thing that silently reads the wrong line
  * (or the wrong key) without anyone noticing until a game tries to call the API.
  */
-class LLMDecisionClientDotEnvTest {
+class DotEnvTest {
 
     @TempDir
     Path tempDir;
@@ -32,13 +32,13 @@ class LLMDecisionClientDotEnvTest {
     @Test
     void readsAPlainKeyValueLine() throws IOException {
         File envFile = writeEnvFile("ANTHROPIC_API_KEY=sk-ant-test-123\n");
-        assertEquals("sk-ant-test-123", LLMDecisionClient.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+        assertEquals("sk-ant-test-123", DotEnv.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
     }
 
     @Test
     void stripsMatchingSurroundingQuotes() throws IOException {
         File envFile = writeEnvFile("ANTHROPIC_API_KEY=\"sk-ant-test-123\"\n");
-        assertEquals("sk-ant-test-123", LLMDecisionClient.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+        assertEquals("sk-ant-test-123", DotEnv.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
     }
 
     @Test
@@ -49,24 +49,30 @@ class LLMDecisionClientDotEnvTest {
                 "SOME_OTHER_KEY=irrelevant",
                 "ANTHROPIC_API_KEY=sk-ant-test-123",
                 ""));
-        assertEquals("sk-ant-test-123", LLMDecisionClient.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+        assertEquals("sk-ant-test-123", DotEnv.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
     }
 
     @Test
     void returnsNullWhenKeyIsAbsent() throws IOException {
         File envFile = writeEnvFile("SOME_OTHER_KEY=value\n");
-        assertNull(LLMDecisionClient.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+        assertNull(DotEnv.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
     }
 
     @Test
     void returnsNullForAnEmptyValue() throws IOException {
         File envFile = writeEnvFile("ANTHROPIC_API_KEY=\n");
-        assertNull(LLMDecisionClient.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+        assertNull(DotEnv.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
     }
 
     @Test
     void trimsWhitespaceAroundTheValue() throws IOException {
         File envFile = writeEnvFile("ANTHROPIC_API_KEY =   sk-ant-test-123  \n");
-        assertEquals("sk-ant-test-123", LLMDecisionClient.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+        assertEquals("sk-ant-test-123", DotEnv.readDotEnvValue(envFile, "ANTHROPIC_API_KEY"));
+    }
+
+    @Test
+    void readsAModelOverrideKeyJustAsWellAsTheApiKey() throws IOException {
+        File envFile = writeEnvFile("ANTHROPIC_PRIMARY_MODEL=claude-sonnet-5\n");
+        assertEquals("claude-sonnet-5", DotEnv.readDotEnvValue(envFile, "ANTHROPIC_PRIMARY_MODEL"));
     }
 }

@@ -177,12 +177,22 @@ public class LLMBridgePlayer extends ComputerPlayer {
     /**
      * Posts the envelope and updates {@link #notes} on success. Empty means the call
      * failed and the caller should fall back to {@code super}'s own logic.
+     * <p>
+     * Notes are logged at INFO on change - there's no GUI surface for a spectator to
+     * see the bot's internal threat assessment (only {@code say} reaches the game
+     * log), so this is the only way to watch it think without attaching a debugger.
+     * Logged only when it actually changed, since the model rewrites it wholesale on
+     * every call and near-duplicate lines every priority check would drown the log.
      */
     private Optional<LLMDecisionResponse> decide(Game game, JsonObject envelope) {
         String decisionType = envelope.getAsJsonObject("decision").get("type").getAsString();
         try {
             LLMDecisionResponse response = client().decide(envelope);
-            this.notes = cappedNotes(response.notes());
+            String updatedNotes = cappedNotes(response.notes());
+            if (!updatedNotes.equals(this.notes)) {
+                logger.info("[" + this.getName() + " notes] " + updatedNotes);
+            }
+            this.notes = updatedNotes;
             if (response.say() != null && !response.say().isEmpty()) {
                 game.informPlayers(this.getName() + " says: \"" + response.say() + "\"");
             }
