@@ -13,6 +13,7 @@ import mage.cards.Card;
 import mage.cards.Cards;
 import mage.cards.decks.Deck;
 import mage.choices.Choice;
+import mage.constants.AbilityType;
 import mage.constants.MultiAmountType;
 import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
@@ -275,12 +276,33 @@ public class LLMBridgePlayer extends ComputerPlayer {
         return super.chooseTargetAmount(outcome, target, source, game);
     }
 
+    /**
+     * Tightened per the design doc's own next step after the first played census
+     * (see LLMBridgeOneVsThreeVanillaCallCountTest): priority was ~85% of all
+     * escalated calls, and most of that isn't a real judgment call at all - it's
+     * "play your only land for turn, there's nothing else to do." That specific case
+     * (one non-mana playable ability, and it's a land) is the only one pulled out
+     * here; everything else - including a single spell or activated ability, where
+     * timing/holding-up-mana is a real question - still goes to the model. Deliberately
+     * narrow: this is a judgment call about cost, not a mechanical "fewer options,
+     * less escalation" rule.
+     */
+    private static boolean isForcedLandPlay(List<ActivatedAbility> playable) {
+        return playable.size() == 1 && playable.get(0).getAbilityType() == AbilityType.PLAY_LAND;
+    }
+
     @Override
     public boolean priority(Game game) {
         logCall("priority");
         List<ActivatedAbility> playable = PriorityOptionEnumerator.playable(this, game);
         if (playable.isEmpty()) {
             return super.priority(game);
+        }
+        if (isForcedLandPlay(playable)) {
+            ActivatedAbility landAbility = playable.get(0);
+            boolean played = activateAbility(landAbility, game);
+            recordHistory(game, (played ? "played " : "attempted ") + landAbility + " (only option, no LLM call)");
+            return played;
         }
 
         JsonObject envelope = GameStateSerializer.serializePriority(
