@@ -43,9 +43,9 @@ public final class GameStateSerializer {
         decision.addProperty("type", decisionType);
         decision.addProperty("prompt", decisionPrompt);
         decision.add("options", options);
-        if ("declare_attackers".equals(decisionType)) {
-            // min/max are informational, not enforced here - see AttackOptionEnumerator's
-            // note on mutual exclusion between options sharing the same source creature
+        if ("declare_attackers".equals(decisionType) || "declare_blockers".equals(decisionType)) {
+            // min/max are informational, not enforced here - see the enumerators'
+            // notes on mutual exclusion between options sharing the same source creature
             decision.addProperty("min_choices", 0);
             decision.addProperty("max_choices", countDistinctSources(options));
         }
@@ -92,6 +92,8 @@ public final class GameStateSerializer {
                 return PriorityOptionEnumerator.enumerate(you, game, seats);
             case "declare_attackers":
                 return AttackOptionEnumerator.enumerate(game, you.getId(), seats);
+            case "declare_blockers":
+                return BlockOptionEnumerator.enumerate(game, you.getId());
             default:
                 return new JsonArray();
         }
