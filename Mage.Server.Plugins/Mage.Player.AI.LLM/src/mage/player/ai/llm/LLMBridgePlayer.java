@@ -177,11 +177,14 @@ public class LLMBridgePlayer extends ComputerPlayer {
      * Posts the envelope and updates {@link #notes} on success. Empty means the call
      * failed and the caller should fall back to {@code super}'s own logic.
      */
-    private Optional<LLMDecisionResponse> decide(JsonObject envelope) {
+    private Optional<LLMDecisionResponse> decide(Game game, JsonObject envelope) {
         String decisionType = envelope.getAsJsonObject("decision").get("type").getAsString();
         try {
             LLMDecisionResponse response = client().decide(envelope);
             this.notes = cappedNotes(response.notes());
+            if (response.say() != null && !response.say().isEmpty()) {
+                game.informPlayers(this.getName() + " says: \"" + response.say() + "\"");
+            }
             return Optional.of(response);
         } catch (RuntimeException e) {
             logger.warn("LLM decision failed for " + decisionType + ", falling back to ComputerPlayer", e);
@@ -230,7 +233,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
 
         JsonObject envelope = GameStateSerializer.serializeChooseTarget(
                 game, this, source, target, target.getMessage(game), notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             return super.chooseTarget(outcome, target, source, game);
         }
@@ -282,7 +285,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
 
         JsonObject envelope = GameStateSerializer.serializePriority(
                 game, this, "Declare a priority action.", notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             return super.priority(game);
         }
@@ -320,7 +323,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
 
         JsonObject envelope = GameStateSerializer.serializeAnnounceX(
                 game, this, message, min, max, notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             return super.announceX(min, max, message, game, source, isManaPay);
         }
@@ -348,7 +351,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
 
     private Optional<Boolean> llmChooseUse(String message, Game game) {
         JsonObject envelope = GameStateSerializer.serializeChooseUse(game, this, message, notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             return Optional.empty();
         }
@@ -386,7 +389,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
         logCall("selectAttackers");
         JsonObject envelope = GameStateSerializer.serializeDeclareAttackers(
                 game, this, "Declare attackers for combat.", notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             super.selectAttackers(game, attackingPlayerId);
             return;
@@ -418,7 +421,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
         logCall("selectBlockers");
         JsonObject envelope = GameStateSerializer.serializeDeclareBlockers(
                 game, this, "Declare blockers for combat.", notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             super.selectBlockers(source, game, defendingPlayerId);
             return;
@@ -459,7 +462,7 @@ public class LLMBridgePlayer extends ComputerPlayer {
 
         JsonObject envelope = GameStateSerializer.serializeChooseMode(
                 game, this, source, modes, "Choose a mode for " + source + ".", notes, historySnapshot());
-        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        Optional<LLMDecisionResponse> maybe = decide(game, envelope);
         if (!maybe.isPresent()) {
             return super.chooseMode(modes, source, game);
         }
