@@ -7,6 +7,8 @@ import mage.game.Game;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -18,9 +20,13 @@ import java.util.UUID;
  * Only combat groups defending you are considered - an attacker aimed at a different
  * opponent in a multiplayer game isn't yours to block.
  * <p>
+ * {@link #enumerate} and {@link #resolve} both build from {@link #pairs}, so a
+ * response's selected index always maps back to the exact pair that produced that
+ * JSON entry.
+ * <p>
  * Same known gap as AttackOptionEnumerator: nothing here enforces the "one creature
  * can't block two attackers" or "an attacker can't be double-counted" constraints
- * between options.
+ * between options - see {@link OptionSelectionValidator}.
  *
  * @author CarmaNayeli
  */
@@ -29,10 +35,46 @@ public final class BlockOptionEnumerator {
     private BlockOptionEnumerator() {
     }
 
+    public static final class Pair {
+        public final UUID blockerId;
+        public final UUID attackerId;
+
+        private Pair(UUID blockerId, UUID attackerId) {
+            this.blockerId = blockerId;
+            this.attackerId = attackerId;
+        }
+    }
+
     public static JsonArray enumerate(Game game, UUID defendingPlayerId) {
         JsonArray options = new JsonArray();
         int index = 0;
+        for (Pair pair : pairs(game, defendingPlayerId)) {
+            Permanent attacker = game.getPermanent(pair.attackerId);
+            Permanent blocker = game.getPermanent(pair.blockerId);
+            JsonObject option = new JsonObject();
+            option.addProperty("index", index++);
+            option.addProperty("label", String.format("Block %s (%d/%d) with %s (%d/%d)",
+                    attacker.getName(), attacker.getPower().getValue(), attacker.getToughness().getValue(),
+                    blocker.getName(), blocker.getPower().getValue(), blocker.getToughness().getValue()));
+            option.addProperty("action", "block");
+            option.addProperty("source", Ids.permanentId(blocker.getId()));
+            option.addProperty("target", Ids.permanentId(attacker.getId()));
+            options.add(option);
+        }
+        return options;
+    }
 
+    /**
+     * The pair a previously-enumerated option's index refers to, or {@code null} if
+     * the index is out of range.
+     */
+    public static Pair resolve(Game game, UUID defendingPlayerId, int index) {
+        List<Pair> pairs = pairs(game, defendingPlayerId);
+        return (index >= 0 && index < pairs.size()) ? pairs.get(index) : null;
+    }
+
+    private static List<Pair> pairs(Game game, UUID defendingPlayerId) {
+        List<Pair> pairs = new ArrayList<>();
         for (CombatGroup group : game.getCombat().getGroups()) {
             if (!defendingPlayerId.equals(group.getDefendingPlayerId())) {
                 continue;
@@ -47,20 +89,10 @@ public final class BlockOptionEnumerator {
                             || !blocker.canBlock(attackerId, game)) {
                         continue;
                     }
-
-                    JsonObject option = new JsonObject();
-                    option.addProperty("index", index++);
-                    option.addProperty("label", String.format("Block %s (%d/%d) with %s (%d/%d)",
-                            attacker.getName(), attacker.getPower().getValue(), attacker.getToughness().getValue(),
-                            blocker.getName(), blocker.getPower().getValue(), blocker.getToughness().getValue()));
-                    option.addProperty("action", "block");
-                    option.addProperty("source", Ids.permanentId(blocker.getId()));
-                    option.addProperty("target", Ids.permanentId(attackerId));
-                    options.add(option);
+                    pairs.add(new Pair(blocker.getId(), attackerId));
                 }
             }
         }
-
-        return options;
+        return pairs;
     }
 }

@@ -166,8 +166,12 @@ public final class GameStateSerializer {
      * current turn-order position, so they don't shift as the active player rotates.
      * Doesn't reflect physical table order yet - fine for eyeballing the contract, a
      * gap to close before seat numbers are used in gameplay-facing option labels.
+     * <p>
+     * Public because callers that translate a response's selected index back into a
+     * game action (see {@link AttackOptionEnumerator#resolve}) need the exact same
+     * seat numbering used to build the envelope's options.
      */
-    private static Map<UUID, Integer> assignSeats(Game game) {
+    public static Map<UUID, Integer> assignSeats(Game game) {
         List<UUID> sortedPlayerIds = new ArrayList<>(game.getPlayerList());
         sortedPlayerIds.sort(Comparator.naturalOrder());
 

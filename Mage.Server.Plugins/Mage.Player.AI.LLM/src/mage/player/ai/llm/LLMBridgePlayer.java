@@ -1,7 +1,12 @@
 package mage.player.ai.llm;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import mage.MageObject;
 import mage.abilities.Ability;
+import mage.abilities.ActivatedAbility;
+import mage.abilities.Mode;
+import mage.abilities.Modes;
 import mage.abilities.TriggeredAbility;
 import mage.abilities.costs.mana.ManaCost;
 import mage.cards.Card;
@@ -14,16 +19,32 @@ import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.draft.Draft;
 import mage.game.match.Match;
+import mage.game.permanent.Permanent;
 import mage.game.tournament.Tournament;
 import mage.player.ai.ComputerPlayer;
+import mage.player.ai.llm.client.LLMDecisionClient;
+import mage.player.ai.llm.client.LLMDecisionResponse;
+import mage.player.ai.llm.serialize.AttackOptionEnumerator;
+import mage.player.ai.llm.serialize.BlockOptionEnumerator;
+import mage.player.ai.llm.serialize.ChooseTargetOptionEnumerator;
+import mage.player.ai.llm.serialize.GameStateSerializer;
+import mage.player.ai.llm.serialize.ModeOptionEnumerator;
+import mage.player.ai.llm.serialize.OptionSelectionValidator;
+import mage.player.ai.llm.serialize.PriorityOptionEnumerator;
 import mage.target.Target;
 import mage.target.TargetAmount;
 import mage.target.TargetCard;
 import mage.util.MultiAmountMessage;
+import org.apache.log4j.Logger;
 
 import java.io.Serializable;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
@@ -33,15 +54,26 @@ import java.util.stream.Collectors;
  * AI: bridges decisions out to an external LLM sidecar over the request/response
  * envelope described in xmage-llm-bridge-design.md.
  * <p>
- * "First evening" step 3: every overridable decision method is instrumented with a
- * call counter and still delegates straight to {@link ComputerPlayer}'s own logic -
- * no behavior change yet. Play a real game and read {@link #printCallCounts()} to see
- * which methods actually get exercised; that's what the escalation filter gets tuned
- * against later.
+ * Wired to the escalation policy's "route to the model" list: {@link #priority},
+ * {@link #selectAttackers}, {@link #selectBlockers}, {@link #chooseMode}, a targeted
+ * subset of {@link #chooseTarget(Outcome, Target, Ability, Game)}, and both
+ * {@code chooseUse} overloads. Everything else - mana payment, trigger ordering,
+ * identical-object choices, scry/surveil - still falls straight to
+ * {@link ComputerPlayer}, per the design doc's escalation policy. Every overridable
+ * decision method keeps its call counter regardless of whether it escalates; read
+ * {@link #printCallCounts()} to see the actual call mix from a played game.
+ * <p>
+ * A call to the LLM can fail (no API key, network error, malformed response) - that's
+ * a real, expected failure mode of an external HTTP dependency, not a bug. Every
+ * escalated decision falls back to {@link ComputerPlayer}'s own logic on failure
+ * rather than crashing the game.
  *
  * @author CarmaNayeli
  */
 public class LLMBridgePlayer extends ComputerPlayer {
+
+    private static final Logger logger = Logger.getLogger(LLMBridgePlayer.class);
+    private static final int MAX_HISTORY_ENTRIES = 20;
 
     private static final Map<String, LongAdder> callCounts = new ConcurrentHashMap<>();
 
@@ -51,6 +83,19 @@ public class LLMBridgePlayer extends ComputerPlayer {
      * wholesale each response and fed back on the next call.
      */
     private String notes = "";
+
+    /**
+     * Recent actions this bot has taken, oldest first, fed back as the envelope's
+     * {@code history}. Bounded so it doesn't grow unbounded over a long game.
+     */
+    private final Deque<String> history = new ArrayDeque<>();
+
+    /**
+     * Lazy and uninitialized in a copy: {@link ComputerPlayer#copy()} is used for
+     * state snapshots, not for spinning up a second live HTTP client, and a missing
+     * API key shouldn't break the copy itself - only an actual decide() call.
+     */
+    private transient LLMDecisionClient client;
 
     public String getNotes() {
         return notes;
@@ -86,11 +131,62 @@ public class LLMBridgePlayer extends ComputerPlayer {
     public LLMBridgePlayer(final LLMBridgePlayer player) {
         super(player);
         this.notes = player.notes;
+        this.history.addAll(player.history);
     }
 
     @Override
     public LLMBridgePlayer copy() {
         return new LLMBridgePlayer(this);
+    }
+
+    private LLMDecisionClient client() {
+        if (client == null) {
+            client = new LLMDecisionClient();
+        }
+        return client;
+    }
+
+    private List<String> historySnapshot() {
+        return new ArrayList<>(history);
+    }
+
+    private void recordHistory(Game game, String label) {
+        history.addLast("T" + game.getTurnNum() + " (you): " + label);
+        while (history.size() > MAX_HISTORY_ENTRIES) {
+            history.removeFirst();
+        }
+    }
+
+    private static String cappedNotes(String notes) {
+        if (notes == null) {
+            return "";
+        }
+        return notes.length() > 500 ? notes.substring(0, 500) : notes;
+    }
+
+    /**
+     * Posts the envelope and updates {@link #notes} on success. Empty means the call
+     * failed and the caller should fall back to {@code super}'s own logic.
+     */
+    private Optional<LLMDecisionResponse> decide(JsonObject envelope) {
+        String decisionType = envelope.getAsJsonObject("decision").get("type").getAsString();
+        try {
+            LLMDecisionResponse response = client().decide(envelope);
+            this.notes = cappedNotes(response.notes());
+            return Optional.of(response);
+        } catch (RuntimeException e) {
+            logger.warn("LLM decision failed for " + decisionType + ", falling back to ComputerPlayer", e);
+            return Optional.empty();
+        }
+    }
+
+    private static List<Integer> selectedIndices(LLMDecisionResponse response) {
+        List<Integer> indices = new ArrayList<>();
+        indices.add(response.choice());
+        if (response.also() != null) {
+            indices.addAll(response.also());
+        }
+        return indices;
     }
 
     @Override
@@ -111,10 +207,54 @@ public class LLMBridgePlayer extends ComputerPlayer {
         return super.choose(outcome, target, source, game, options);
     }
 
+    /**
+     * Design doc: "chooseTarget when targets include opponents or opposing
+     * permanents." Targeting only your own stuff (e.g. an equip aura you control) has
+     * no real judgment call to make, so it stays on the free/ComputerPlayer path.
+     */
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
         logCall("chooseTarget(Target)");
-        return super.chooseTarget(outcome, target, source, game);
+        if (!involvesOpponent(target, source, game)) {
+            return super.chooseTarget(outcome, target, source, game);
+        }
+
+        JsonObject envelope = GameStateSerializer.serializeChooseTarget(
+                game, this, source, target, target.getMessage(game), notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            return super.chooseTarget(outcome, target, source, game);
+        }
+
+        for (int index : selectedIndices(maybe.get())) {
+            if (target.isChoiceCompleted(this.getId(), source, game, null)) {
+                break;
+            }
+            UUID candidate = ChooseTargetOptionEnumerator.resolve(game, this.getId(), source, target, index);
+            if (candidate != null && !target.getTargets().contains(candidate)) {
+                target.addTarget(candidate, source, game);
+            }
+        }
+
+        boolean chosen = !target.getTargets().isEmpty();
+        recordHistory(game, (chosen ? "chose target for " : "chose no target for ") + source);
+        return chosen;
+    }
+
+    private boolean involvesOpponent(Target target, Ability source, Game game) {
+        for (UUID candidateId : target.possibleTargets(this.getId(), source, game)) {
+            if (candidateId.equals(this.getId())) {
+                continue;
+            }
+            if (game.getPlayer(candidateId) != null) {
+                return true;
+            }
+            Permanent permanent = game.getPermanent(candidateId);
+            if (permanent != null && !this.getId().equals(permanent.getControllerId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -126,7 +266,28 @@ public class LLMBridgePlayer extends ComputerPlayer {
     @Override
     public boolean priority(Game game) {
         logCall("priority");
-        return super.priority(game);
+        List<ActivatedAbility> playable = PriorityOptionEnumerator.playable(this, game);
+        if (playable.isEmpty()) {
+            return super.priority(game);
+        }
+
+        JsonObject envelope = GameStateSerializer.serializePriority(
+                game, this, "Declare a priority action.", notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            return super.priority(game);
+        }
+
+        ActivatedAbility ability = PriorityOptionEnumerator.resolve(this, game, maybe.get().choice());
+        if (ability == null) {
+            pass(game);
+            recordHistory(game, "passed priority");
+            return false;
+        }
+
+        boolean acted = activateAbility(ability, game);
+        recordHistory(game, (acted ? "played " : "attempted ") + ability);
+        return acted;
     }
 
     @Override
@@ -144,13 +305,25 @@ public class LLMBridgePlayer extends ComputerPlayer {
     @Override
     public boolean chooseUse(Outcome outcome, String message, Ability source, Game game) {
         logCall("chooseUse(simple)");
-        return super.chooseUse(outcome, message, source, game);
+        return llmChooseUse(message, game).orElseGet(() -> super.chooseUse(outcome, message, source, game));
     }
 
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         logCall("chooseUse(worded)");
-        return super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game);
+        return llmChooseUse(message, game)
+                .orElseGet(() -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
+    }
+
+    private Optional<Boolean> llmChooseUse(String message, Game game) {
+        JsonObject envelope = GameStateSerializer.serializeChooseUse(game, this, message, notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            return Optional.empty();
+        }
+        boolean yes = maybe.get().choice() == 0;
+        recordHistory(game, (yes ? "chose yes: " : "chose no: ") + message);
+        return Optional.of(yes);
     }
 
     @Override
@@ -180,13 +353,64 @@ public class LLMBridgePlayer extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         logCall("selectAttackers");
-        super.selectAttackers(game, attackingPlayerId);
+        JsonObject envelope = GameStateSerializer.serializeDeclareAttackers(
+                game, this, "Declare attackers for combat.", notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            super.selectAttackers(game, attackingPlayerId);
+            return;
+        }
+
+        JsonArray options = envelope.getAsJsonObject("decision").getAsJsonArray("options");
+        List<Integer> selected = selectedIndices(maybe.get());
+        Set<Integer> rejected = OptionSelectionValidator.findConflicts(options, selected).stream()
+                .map(c -> c.secondIndex)
+                .collect(Collectors.toSet());
+
+        Map<UUID, Integer> seats = GameStateSerializer.assignSeats(game);
+        int declared = 0;
+        for (int index : selected) {
+            if (rejected.contains(index)) {
+                continue;
+            }
+            AttackOptionEnumerator.Pair pair = AttackOptionEnumerator.resolve(game, attackingPlayerId, seats, index);
+            if (pair != null) {
+                declareAttacker(pair.attackerId, pair.defenderId, game, false);
+                declared++;
+            }
+        }
+        recordHistory(game, declared == 0 ? "declared no attackers" : "declared " + declared + " attacker(s)");
     }
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         logCall("selectBlockers");
-        super.selectBlockers(source, game, defendingPlayerId);
+        JsonObject envelope = GameStateSerializer.serializeDeclareBlockers(
+                game, this, "Declare blockers for combat.", notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            super.selectBlockers(source, game, defendingPlayerId);
+            return;
+        }
+
+        JsonArray options = envelope.getAsJsonObject("decision").getAsJsonArray("options");
+        List<Integer> selected = selectedIndices(maybe.get());
+        Set<Integer> rejected = OptionSelectionValidator.findConflicts(options, selected).stream()
+                .map(c -> c.secondIndex)
+                .collect(Collectors.toSet());
+
+        int declared = 0;
+        for (int index : selected) {
+            if (rejected.contains(index)) {
+                continue;
+            }
+            BlockOptionEnumerator.Pair pair = BlockOptionEnumerator.resolve(game, defendingPlayerId, index);
+            if (pair != null) {
+                declareBlocker(defendingPlayerId, pair.blockerId, pair.attackerId, game);
+                declared++;
+            }
+        }
+        recordHistory(game, declared == 0 ? "declared no blockers" : "declared " + declared + " blocker(s)");
     }
 
     @Override
@@ -196,9 +420,25 @@ public class LLMBridgePlayer extends ComputerPlayer {
     }
 
     @Override
-    public mage.abilities.Mode chooseMode(mage.abilities.Modes modes, Ability source, Game game) {
+    public Mode chooseMode(Modes modes, Ability source, Game game) {
         logCall("chooseMode");
-        return super.chooseMode(modes, source, game);
+        if (modes.size() <= 1) {
+            return super.chooseMode(modes, source, game);
+        }
+
+        JsonObject envelope = GameStateSerializer.serializeChooseMode(
+                game, this, source, modes, "Choose a mode for " + source + ".", notes, historySnapshot());
+        Optional<LLMDecisionResponse> maybe = decide(envelope);
+        if (!maybe.isPresent()) {
+            return super.chooseMode(modes, source, game);
+        }
+
+        Mode chosen = ModeOptionEnumerator.resolve(modes, maybe.get().choice());
+        if (chosen == null) {
+            return super.chooseMode(modes, source, game);
+        }
+        recordHistory(game, "chose mode: " + chosen.getEffects().getText(chosen));
+        return chosen;
     }
 
     @Override

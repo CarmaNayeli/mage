@@ -9,6 +9,7 @@ import mage.game.Game;
 import mage.players.Player;
 import mage.target.Target;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,11 +22,15 @@ import java.util.UUID;
  * <p>
  * Mana abilities are filtered out on purpose: the escalation policy in the design doc
  * puts mana payment and land tapping on the free/ComputerPlayer side of the line, so
- * they never belong in a decision the model is asked to make.
+ * they never belong in a decision the model is asked to make. {@link #playable} is the
+ * shared filtered list; {@link #enumerate} builds JSON from it and {@link #resolve}
+ * indexes back into it, so a response's selected index always maps to the same
+ * ability that produced its JSON entry.
  * <p>
  * "Pass" is always appended as the last option and is the majority-correct answer -
  * the design doc's own warning is that an untrained bridge will respond to everything
- * if given the chance.
+ * if given the chance. {@link #resolve} returns {@code null} for that index (and for
+ * any out-of-range index), which callers treat as "pass".
  *
  * @author CarmaNayeli
  */
@@ -34,16 +39,22 @@ public final class PriorityOptionEnumerator {
     private PriorityOptionEnumerator() {
     }
 
+    public static List<ActivatedAbility> playable(Player player, Game game) {
+        List<ActivatedAbility> result = new ArrayList<>();
+        for (ActivatedAbility ability : player.getPlayable(game, true)) {
+            if (ability.getAbilityType() != AbilityType.ACTIVATED_MANA) {
+                result.add(ability);
+            }
+        }
+        return result;
+    }
+
     public static JsonArray enumerate(Player player, Game game, Map<UUID, Integer> seats) {
         JsonArray options = new JsonArray();
-        List<ActivatedAbility> playable = player.getPlayable(game, true);
+        List<ActivatedAbility> playable = playable(player, game);
 
         int index = 0;
         for (ActivatedAbility ability : playable) {
-            if (ability.getAbilityType() == AbilityType.ACTIVATED_MANA) {
-                continue;
-            }
-
             JsonObject option = new JsonObject();
             option.addProperty("index", index++);
             option.addProperty("label", ability.toString());
@@ -65,6 +76,15 @@ public final class PriorityOptionEnumerator {
         options.add(pass);
 
         return options;
+    }
+
+    /**
+     * The ability a previously-enumerated option's index refers to, or {@code null}
+     * for the trailing "Pass priority" option and for any out-of-range index.
+     */
+    public static ActivatedAbility resolve(Player player, Game game, int index) {
+        List<ActivatedAbility> options = playable(player, game);
+        return (index >= 0 && index < options.size()) ? options.get(index) : null;
     }
 
     private static String actionFor(AbilityType type) {
