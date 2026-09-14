@@ -138,6 +138,17 @@ public class LLMBridgePlayer extends ComputerPlayer {
         super(name, range);
     }
 
+    /**
+     * Required by {@link mage.server.game.PlayerFactory#createPlayer}, which
+     * reflectively looks up a {@code (String, RangeOfInfluence, int)} constructor for
+     * every registered {@link mage.players.PlayerType} - the numeric skill knob other
+     * AI implementations use for difficulty doesn't map onto anything here (the model
+     * itself isn't tunable that way), so it's accepted and ignored.
+     */
+    public LLMBridgePlayer(String name, RangeOfInfluence range, int skill) {
+        super(name, range);
+    }
+
     public LLMBridgePlayer(final LLMBridgePlayer player) {
         super(player);
         this.notes = player.notes;
