@@ -16,9 +16,16 @@ const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
 function App() {
   const [connect, setConnect] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<JoinRequest | null>(null);
+  const [lastJoinRequest, setLastJoinRequest] = useState<JoinRequest | null>(null);
   const [tableTalk, setTableTalk] = useState(() => loadTableTalk());
   const [chatDraft, setChatDraft] = useState("");
-  const { state, send, reset, answerDialog } = useGatewayConnection(connect ? GATEWAY_URL : null);
+  // Bumped on every reconnect attempt so the url passed to useGatewayConnection always
+  // changes, even when `connect` was already true (a mid-game disconnect doesn't flip
+  // it back to false) - its effect is keyed on the url string, so without this a
+  // reconnect click after a mid-game drop would be a no-op.
+  const [connectAttempt, setConnectAttempt] = useState(0);
+  const wsUrl = connect ? `${GATEWAY_URL}?attempt=${connectAttempt}` : null;
+  const { state, send, reset, answerDialog } = useGatewayConnection(wsUrl);
 
   const toggleTableTalk = () => {
     setTableTalk((current) => {
@@ -50,6 +57,7 @@ function App() {
   }, [connectionFailed]);
 
   const handleDeckSubmit = (request: JoinRequest) => {
+    setLastJoinRequest(request);
     setPendingJoin(request);
     setConnect(true);
   };
@@ -92,6 +100,19 @@ function App() {
     reset();
   };
 
+  // There's no real session-resume wired up (a fresh GatewaySession on the gateway has
+  // no memory of the old game) - so "reconnect" honestly means a new connection, and
+  // if we know what deck they were playing, jump straight back into a fresh table with
+  // it rather than dumping them on a blank form.
+  const handleReconnect = () => {
+    reset();
+    setConnectAttempt((n) => n + 1);
+    if (lastJoinRequest) {
+      setPendingJoin(lastJoinRequest);
+    }
+    setConnect(true);
+  };
+
   const joining = connect && !state.game && !connectionFailed;
 
   // Every card that's currently legal to click: whatever the server says is playable
@@ -107,7 +128,14 @@ function App() {
       <header className="app-header">
         <img src={logo} alt="XEffigy" className="app-logo" />
         <span className="app-subtitle">Practice Magic: The Gathering against an LLM bot</span>
-        {connect && <span className={`connection-status ${state.connectionStatus}`}>{state.connectionStatus}</span>}
+        {connect &&
+          (state.connectionStatus === "disconnected" || state.connectionStatus === "error" ? (
+            <button className="connection-status reconnect" onClick={handleReconnect}>
+              Reconnect
+            </button>
+          ) : (
+            <span className={`connection-status ${state.connectionStatus}`}>{state.connectionStatus}</span>
+          ))}
         <HamburgerMenu
           items={[
             { label: "Restart", onClick: handleRestart, disabled: !connect },
@@ -132,48 +160,54 @@ function App() {
           />
         </>
       ) : (
-        <Board game={state.game} onPlayCard={handlePlayCard} playableIds={playableIds} />
-      )}
+        <div className="game-layout">
+          <div className="game-main">
+            <Board game={state.game} onPlayCard={handlePlayCard} playableIds={playableIds} />
 
-      {state.gameOver && <GameOverBanner message={state.gameOver} onPlayAgain={handlePlayAgain} />}
-
-      {state.pendingDialog && (
-        <DialogPrompt
-          type={state.pendingDialog.type}
-          payload={state.pendingDialog.payload}
-          game={state.game}
-          onRespond={handleDialogRespond}
-        />
-      )}
-
-      {(visibleMessages.length > 0 || (state.game && tableTalk)) && (
-        <div className="message-log">
-          <div className="message-log-title">Game Log</div>
-          {visibleMessages.length > 0 && (
-            <div className="message-log-entries">
-              {visibleMessages.slice(-30).map((msg, i) => (
-                <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
-                  {msg.text}
-                </div>
-              ))}
-            </div>
-          )}
-          {state.game && tableTalk && (
-            <form className="chat-input" onSubmit={handleSendChat}>
-              <input
-                type="text"
-                value={chatDraft}
-                onChange={(e) => setChatDraft(e.target.value)}
-                placeholder="Talk trash back…"
-                maxLength={280}
+            {state.pendingDialog && (
+              <DialogPrompt
+                type={state.pendingDialog.type}
+                payload={state.pendingDialog.payload}
+                game={state.game}
+                onRespond={handleDialogRespond}
               />
-              <button type="submit" disabled={!chatDraft.trim()}>
-                Send
-              </button>
-            </form>
+            )}
+          </div>
+
+          {(visibleMessages.length > 0 || tableTalk) && (
+            <div className="game-sidebar">
+              <div className="message-log">
+                <div className="message-log-title">Game Log</div>
+                {visibleMessages.length > 0 && (
+                  <div className="message-log-entries">
+                    {visibleMessages.slice(-30).map((msg, i) => (
+                      <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
+                        {msg.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {tableTalk && (
+                  <form className="chat-input" onSubmit={handleSendChat}>
+                    <input
+                      type="text"
+                      value={chatDraft}
+                      onChange={(e) => setChatDraft(e.target.value)}
+                      placeholder="Say something…"
+                      maxLength={280}
+                    />
+                    <button type="submit" disabled={!chatDraft.trim()}>
+                      Send
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
+
+      {state.gameOver && <GameOverBanner message={state.gameOver} onPlayAgain={handlePlayAgain} />}
     </div>
   );
 }

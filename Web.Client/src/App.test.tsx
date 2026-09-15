@@ -167,15 +167,15 @@ describe("App", () => {
     act(() => socket.triggerOpen());
     act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
 
-    fireEvent.change(screen.getByPlaceholderText("Talk trash back…"), { target: { value: "gg already?" } });
+    fireEvent.change(screen.getByPlaceholderText("Say something…"), { target: { value: "gg already?" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(socket.sent).toContainEqual(JSON.stringify({ call: "chat", args: ["gg already?"] }));
-    expect(screen.getByPlaceholderText("Talk trash back…")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Say something…")).toHaveValue("");
 
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Table Talk: On" }));
-    expect(screen.queryByPlaceholderText("Talk trash back…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Say something…")).not.toBeInTheDocument();
   });
 
   it("re-enables the form and lets a retry open a fresh socket after a connection failure", () => {
@@ -190,5 +190,28 @@ describe("App", () => {
     startGame("Carma", "20 Mountain");
     expect(MockWebSocket.instances).toHaveLength(2);
     expect(MockWebSocket.instances[1].closed).toBe(false);
+  });
+
+  it("turns into a Reconnect button on a mid-game disconnect, and opens a fresh socket with the same deck", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const first = MockWebSocket.instances[0];
+    act(() => first.triggerOpen());
+    act(() => first.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+
+    act(() => first.triggerClose());
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(MockWebSocket.instances[1].closed).toBe(false);
+
+    act(() => MockWebSocket.instances[1].triggerOpen());
+    expect(MockWebSocket.instances[1].sent).toEqual([
+      JSON.stringify({
+        call: "join_practice_table",
+        args: [{ playerName: "Carma", format: "freeform", playerDeck: "20 Mountain", opponentMode: "basic" }],
+      }),
+    ]);
   });
 });

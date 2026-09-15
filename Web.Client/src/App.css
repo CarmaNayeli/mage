@@ -74,6 +74,18 @@
     background: rgba(191, 72, 55, 0.2);
     color: #e0897a;
   }
+
+  &.reconnect {
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    background: rgba(191, 72, 55, 0.2);
+    color: #e0897a;
+
+    &:hover {
+      background: rgba(191, 72, 55, 0.35);
+    }
+  }
 }
 
 /* Hamburger menu */
@@ -279,6 +291,31 @@
   color: var(--text);
   font-size: 0.85rem;
   font-style: italic;
+}
+
+/* Game layout - board + dialog on one side, log/chat as a sidebar, so the log isn't
+ * stacked below everything else (a full page of scrolling to see it, and it used to
+ * shove the dialog down into overlapping the hand before the dialog became a normal-
+ * flow element - see .dialog-prompt above). Wraps to a single column once the sidebar
+ * can't fit at a reasonable width. */
+.game-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.game-main {
+  flex: 3 1 480px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-sidebar {
+  flex: 1 1 280px;
+  min-width: 240px;
 }
 
 /* Board */
@@ -506,12 +543,12 @@
   align-items: center;
   justify-content: center;
   z-index: 20;
-  cursor: pointer;
+  /* Must stay click/hover-through - see CardZoom.tsx for why. */
+  pointer-events: none;
 }
 
 .card-zoom {
   max-width: min(360px, 90vw);
-  cursor: default;
 
   img {
     width: 100%;

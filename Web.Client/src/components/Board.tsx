@@ -111,7 +111,7 @@ export function Board({ game, onPlayCard, playableIds }: BoardProps) {
         </div>
       )}
 
-      {zoomedCard && <CardZoom card={zoomedCard} onClose={() => setZoomKeyHeld(false)} />}
+      {zoomedCard && <CardZoom card={zoomedCard} />}
     </div>
   );
 }
