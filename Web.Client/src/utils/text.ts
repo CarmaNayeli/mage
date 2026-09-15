@@ -21,6 +21,21 @@ export function stripHtmlTags(text: string): string {
  * GAME_ERROR is the one type that really is a bare string. Falls back to JSON if none
  * of these shapes match, rather than silently swallowing an unrecognized payload.
  */
+/**
+ * The bot's own flavor lines (LLMBridgePlayer.java: `this.getName() + " says: \"" +
+ * response.say() + "\""`) go out through `game.informPlayers(...)` - the engine's
+ * ordinary narration channel, tagged messageType "GAME" like any other play-by-play
+ * line, NOT the real chat "TALK" channel a human's typed message uses (there's no
+ * engine-level API for a Player to emit a properly TALK-tagged broadcast; that lives
+ * in Mage.Server's chat plumbing, a layer up from where a Player object can reach).
+ * Relying on messageType alone left "Table Talk: Off" unable to hide these at all -
+ * this pattern is distinctive enough (only this one code path ever produces it) to
+ * catch them by content instead, on top of the real messageType check.
+ */
+export function isBotFlavorLine(text: string): boolean {
+  return / says: "/.test(text);
+}
+
 export function extractMessageText(data: unknown): string {
   if (typeof data === "string") return data;
   if (data && typeof data === "object") {

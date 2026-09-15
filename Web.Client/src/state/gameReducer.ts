@@ -1,16 +1,19 @@
 import type { AccountDeckContent, AccountDeckSummary, AccountLoggedIn, DialogPayload, GatewayEnvelope } from "../types/envelope";
 import type { GameView } from "../types/gameView";
 import { isAutoPassablePriority } from "../utils/autoPass";
-import { extractMessageText, stripHtmlTags } from "../utils/text";
+import { extractMessageText, isBotFlavorLine, stripHtmlTags } from "../utils/text";
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
 
-/** One line in the game log. `isTalk` is true only for an actual chat message (the
- * bot's flavor "says" lines, or the player's own replies) - real ChatMessage payloads
- * carry `messageType: "TALK"` for these and "GAME"/"STATUS" for ordinary play-by-play
- * (informPlayers), so this is a structural distinction, not a text-pattern guess. It's
- * what "Table Talk: On/Off" (App.tsx) filters on - play-by-play narration always
- * stays, only the talking is toggleable. */
+/** One line in the game log. `isTalk` is true for an actual chat message: the
+ * player's own replies carry a real `messageType: "TALK"` (ordinary play-by-play from
+ * informPlayers is "GAME"/"STATUS"), but the bot's own flavor "says" lines are NOT
+ * real chat - LLMBridgePlayer has no engine-level API to emit a properly TALK-tagged
+ * broadcast (that only exists a layer up, in Mage.Server's chat plumbing), so it goes
+ * out through informPlayers like any other narration and arrives tagged "GAME" too.
+ * isBotFlavorLine's text-pattern check is what actually catches those. It's what
+ * "Table Talk: On/Off" (App.tsx) filters on - play-by-play narration always stays,
+ * only the talking is toggleable. */
 export interface LogEntry {
   text: string;
   isTalk: boolean;
@@ -153,7 +156,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (MESSAGE_TYPES.has(type)) {
         const text = stripHtmlTags(extractMessageText(data));
         const messageType = data && typeof data === "object" ? (data as { messageType?: string }).messageType : undefined;
-        const entry: LogEntry = { text, isTalk: messageType === "TALK" };
+        const entry: LogEntry = { text, isTalk: messageType === "TALK" || isBotFlavorLine(text) };
         return { ...state, messages: [...state.messages, entry].slice(-100) };
       }
 

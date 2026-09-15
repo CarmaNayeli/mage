@@ -122,6 +122,20 @@ describe("gameReducer", () => {
     expect(next.messages).toEqual([{ text: 'Practice Bot says: "Not bad, for a human."', isTalk: true }]);
   });
 
+  it("marks the bot's own flavor line as talk even though it's really tagged messageType GAME (informPlayers, not real chat - LLMBridgePlayer has no way to emit a real TALK broadcast), so 'Table Talk: Off' actually hides it", () => {
+    const next = gameReducer(
+      initialGameState,
+      envelope("CHATMESSAGE", {
+        username: "",
+        message: 'Practice Bot says: "Two lands on turn five. Time to go digging."',
+        time: null,
+        color: "BLACK",
+        messageType: "GAME",
+      }),
+    );
+    expect(next.messages).toEqual([{ text: 'Practice Bot says: "Two lands on turn five. Time to go digging."', isTalk: true }]);
+  });
+
   it("extracts .message from a real GameClientMessage-shaped GAME_INFORM_PERSONAL payload", () => {
     const next = gameReducer(
       initialGameState,

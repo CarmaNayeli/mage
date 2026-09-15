@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractMessageText, stripHtmlTags } from "./text";
+import { extractMessageText, isBotFlavorLine, stripHtmlTags } from "./text";
 
 describe("stripHtmlTags", () => {
   it("removes tags while keeping the text", () => {
@@ -36,5 +36,16 @@ describe("extractMessageText", () => {
 
   it("falls back to JSON for anything unrecognized", () => {
     expect(extractMessageText({ winner: "Practice Bot" })).toBe(JSON.stringify({ winner: "Practice Bot" }));
+  });
+});
+
+describe("isBotFlavorLine", () => {
+  it("matches the bot's real 'says' construction (LLMBridgePlayer.java)", () => {
+    expect(isBotFlavorLine('Practice Bot says: "Two lands on turn five. Time to go digging."')).toBe(true);
+  });
+
+  it("does not match ordinary play-by-play narration", () => {
+    expect(isBotFlavorLine("Practice Bot casts Lightning Bolt")).toBe(false);
+    expect(isBotFlavorLine("Forest was destroyed by Beast Within")).toBe(false);
   });
 });
