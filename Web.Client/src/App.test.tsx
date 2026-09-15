@@ -271,7 +271,7 @@ describe("App", () => {
     expect(document.querySelector(".card-zoom-backdrop")).not.toBeInTheDocument();
   });
 
-  it("hides the bot's table talk when the setting is toggled off, and remembers the choice", () => {
+  it("hides the bot's table talk by default, showing it once the setting is toggled on (and remembers the choice)", () => {
     render(<App />);
     startGame("Carma", "20 Mountain");
     const socket = MockWebSocket.instances[0];
@@ -292,24 +292,31 @@ describe("App", () => {
       }),
     );
 
-    expect(screen.getByText('Practice Bot says: "Try harder."')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Table Talk: On" }));
-
+    // Off by default - the talk line is filtered, ordinary play-by-play still shows.
     expect(screen.queryByText('Practice Bot says: "Try harder."')).not.toBeInTheDocument();
     expect(screen.getByText("Practice Bot casts Lightning Bolt")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
     expect(screen.getByRole("button", { name: "Table Talk: Off" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Table Talk: Off" }));
+
+    expect(screen.getByText('Practice Bot says: "Try harder."')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("button", { name: "Table Talk: On" })).toBeInTheDocument();
   });
 
-  it("lets the player chat back to the bot while table talk is on, and hides the box when it's off", () => {
+  it("only shows the chat box once table talk is toggled on, and lets the player chat back to the bot", () => {
     render(<App />);
     startGame("Carma", "20 Mountain");
     const socket = MockWebSocket.instances[0];
     act(() => socket.triggerOpen());
     act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+
+    expect(screen.queryByPlaceholderText("Say something…")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Table Talk: Off" }));
 
     fireEvent.change(screen.getByPlaceholderText("Say something…"), { target: { value: "gg already?" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));

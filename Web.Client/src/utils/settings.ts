@@ -6,9 +6,9 @@ const TABLE_TALK_KEY = "xeffigy.tableTalk";
 export function loadTableTalk(): boolean {
   try {
     const raw = localStorage.getItem(TABLE_TALK_KEY);
-    return raw === null ? true : raw === "true";
+    return raw === null ? false : raw === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 

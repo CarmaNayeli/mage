@@ -6,8 +6,8 @@ beforeEach(() => {
 });
 
 describe("table talk setting", () => {
-  it("defaults to on when nothing has been saved yet", () => {
-    expect(loadTableTalk()).toBe(true);
+  it("defaults to off when nothing has been saved yet", () => {
+    expect(loadTableTalk()).toBe(false);
   });
 
   it("round-trips a saved value", () => {

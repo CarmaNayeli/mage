@@ -47,7 +47,7 @@ function App() {
 
   // A logged-in account's tableTalk setting overrides the guest/localStorage one -
   // once logged in, the setting is persisted server-side instead (see toggleTableTalk).
-  const tableTalk = state.account ? (state.account.settings.tableTalk ?? true) : guestTableTalk;
+  const tableTalk = state.account ? (state.account.settings.tableTalk ?? false) : guestTableTalk;
 
   // The saved-decks *list* lives here (not inside DeckEntry) so the hamburger menu's
   // "Load Deck" submenu and DeckEntry's own inline "My Decks" panel always show the

@@ -379,7 +379,7 @@ final class AccountStore {
 
     private static JsonObject defaultSettings() {
         JsonObject settings = new JsonObject();
-        settings.addProperty("tableTalk", true);
+        settings.addProperty("tableTalk", false);
         return settings;
     }
 
