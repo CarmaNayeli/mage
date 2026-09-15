@@ -1,4 +1,5 @@
 import type { CardView, GameView } from "../types/gameView";
+import { Exile } from "./Exile";
 import { Hand } from "./Hand";
 import { PlayerPanel } from "./PlayerPanel";
 import { Stack } from "./Stack";
@@ -29,6 +30,7 @@ export function Board({ game, onPlayCard }: BoardProps) {
       </div>
 
       <Stack cards={game.stack} />
+      <Exile exiles={game.exiles} />
 
       {me && (
         <div className="me">

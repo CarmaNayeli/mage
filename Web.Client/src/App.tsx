@@ -70,11 +70,19 @@ function App() {
       </header>
 
       {!state.game ? (
-        <DeckEntry
-          onSubmit={handleDeckSubmit}
-          disabled={joining}
-          error={connectionFailed ? "Couldn't reach the server - check the gateway is running and try again." : state.lastError}
-        />
+        <>
+          <p className="app-intro">
+            XEffigy is a free place to practice Magic: The Gathering against an AI opponent. It's built on{" "}
+            <strong>XMage</strong>, the open-source Magic engine that runs the actual rules and game state, with{" "}
+            <strong>Claude</strong> (Anthropic's AI) making every decision for the bot you're playing against - so
+            it can bluff, block, and sequence its turns like a real, if occasionally weird, opponent.
+          </p>
+          <DeckEntry
+            onSubmit={handleDeckSubmit}
+            disabled={joining}
+            error={connectionFailed ? "Couldn't reach the server - check the gateway is running and try again." : state.lastError}
+          />
+        </>
       ) : (
         <Board game={state.game} onPlayCard={handlePlayCard} />
       )}

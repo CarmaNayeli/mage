@@ -46,6 +46,18 @@
   font-size: 0.9rem;
 }
 
+.app-intro {
+  max-width: 640px;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+
+  strong {
+    color: var(--text-h);
+    font-weight: 600;
+  }
+}
+
 .connection-status {
   font-size: 0.8rem;
   padding: 2px 8px;
@@ -212,6 +224,56 @@
 
 .stack-cards {
   display: flex;
+  gap: 4px;
+}
+
+.graveyard {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.graveyard-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  opacity: 0.75;
+}
+
+.mana-pool {
+  display: flex;
+  gap: 4px;
+}
+
+.mana-pip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.exile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exile-zone {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exile-cards {
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
