@@ -3,11 +3,10 @@ import { gameReducer, initialGameState, type GameState } from "../state/gameRedu
 import type { GatewayEnvelope } from "../types/envelope";
 
 /**
- * Connects to Web.Gateway's WebSocket endpoint (not built yet on the server side as
- * of this writing - only the one-shot SmokeTestCli exists there today; this hook is
- * written against the JSON contract that CLI already proves out, ready for when the
- * gateway grows a real always-on WS server). Each server push is a GatewayEnvelope
- * (see types/envelope.ts); `send` mirrors that shape back for player actions.
+ * Connects to Web.Gateway's WebSocket endpoint (mage.web.gateway.GatewayServer).
+ * Each server push is a GatewayEnvelope (see types/envelope.ts); `send` mirrors the
+ * real Session API back - "send_uuid"/"send_boolean"/"send_integer"/"send_string"/
+ * "send_mana_type", plus "join_practice_table" to start a match.
  */
 export function useGatewayConnection(url: string | null) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
@@ -51,10 +50,12 @@ export function useGatewayConnection(url: string | null) {
   }, []);
 
   const reset = useCallback(() => dispatch({ kind: "reset" }), []);
+  const answerDialog = useCallback(() => dispatch({ kind: "dialog-answered" }), []);
 
-  return { state, send, reset } satisfies {
+  return { state, send, reset, answerDialog } satisfies {
     state: GameState;
     send: (call: string, args?: unknown[]) => void;
     reset: () => void;
+    answerDialog: () => void;
   };
 }

@@ -14,7 +14,7 @@ export function PlayerPanel({ player, isActivePlayer }: PlayerPanelProps) {
       <div className="player-header">
         <span className="player-name">{player.name}</span>
         <span className="player-life">{player.life}</span>
-        {!player.human && <span className="player-badge">Bot</span>}
+        {!player.isHuman && <span className="player-badge">Bot</span>}
         {player.manaPool && <ManaPool pool={player.manaPool} />}
         <span className="player-hand-count">{player.handCount} cards</span>
       </div>

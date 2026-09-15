@@ -29,7 +29,7 @@ const minimalGameView = {
   companion: [],
   combat: [],
   players: [
-    { playerId: "p1", name: "Me", life: 20, human: true, inGame: true, hasLeft: false, handCount: 0, graveyard: {}, battlefield: {} },
+    { playerId: "p1", name: "Me", life: 20, isHuman: true, hasLeft: false, handCount: 0, graveyard: {}, battlefield: {} },
   ],
 } as unknown as GameView;
 

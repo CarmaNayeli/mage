@@ -44,6 +44,7 @@ const DIALOG_TYPES = new Set([
 
 const MESSAGE_TYPES = new Set(["CHATMESSAGE", "SHOW_USERMESSAGE", "SERVER_MESSAGE", "GAME_INFORM_PERSONAL"]);
 const GAME_OVER_TYPES = new Set(["GAME_OVER", "END_GAME_INFO"]);
+const ERROR_TYPES = new Set(["GAME_ERROR", "GATEWAY_ERROR"]);
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.kind) {
@@ -72,7 +73,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, messages: [...state.messages, text].slice(-100) };
       }
 
-      if (type === "GAME_ERROR") {
+      if (ERROR_TYPES.has(type)) {
         return { ...state, lastError: typeof data === "string" ? data : JSON.stringify(data) };
       }
 

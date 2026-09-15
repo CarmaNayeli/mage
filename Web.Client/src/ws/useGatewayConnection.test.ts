@@ -57,14 +57,14 @@ describe("useGatewayConnection", () => {
   it("sends JSON-encoded calls once the socket is open", () => {
     const { result } = renderHook(() => useGatewayConnection("ws://test"));
     act(() => MockWebSocket.instances[0].triggerOpen());
-    act(() => result.current.send("play_card", ["card-1"]));
-    expect(MockWebSocket.instances[0].sent).toEqual([JSON.stringify({ call: "play_card", args: ["card-1"] })]);
+    act(() => result.current.send("send_uuid", ["card-1"]));
+    expect(MockWebSocket.instances[0].sent).toEqual([JSON.stringify({ call: "send_uuid", args: ["card-1"] })]);
   });
 
   it("warns and drops the call instead of throwing when the socket isn't open", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { result } = renderHook(() => useGatewayConnection("ws://test"));
-    act(() => result.current.send("play_card", ["card-1"]));
+    act(() => result.current.send("send_uuid", ["card-1"]));
     expect(warnSpy).toHaveBeenCalled();
     expect(MockWebSocket.instances[0].sent).toEqual([]);
   });

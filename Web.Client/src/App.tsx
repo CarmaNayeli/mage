@@ -5,7 +5,7 @@ import { Board } from "./components/Board";
 import { DialogPrompt } from "./components/DialogPrompt";
 import { GameOverBanner } from "./components/GameOverBanner";
 import { DeckEntry } from "./preGame/DeckEntry";
-import type { CardView } from "./types/gameView";
+import { resolvePlayAbilityId, type CardView } from "./types/gameView";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
@@ -18,7 +18,7 @@ interface PendingJoin {
 function App() {
   const [connect, setConnect] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
-  const { state, send, reset } = useGatewayConnection(connect ? GATEWAY_URL : null);
+  const { state, send, reset, answerDialog } = useGatewayConnection(connect ? GATEWAY_URL : null);
 
   // The socket only actually opens after useGatewayConnection's own effect runs,
   // so a join sent synchronously from handleDeckSubmit would race an unopened
@@ -46,12 +46,20 @@ function App() {
     setConnect(true);
   };
 
-  const handleDialogChoice = (index: number) => {
-    send("answer_dialog", [index]);
+  const handleDialogRespond = (call: "send_uuid" | "send_boolean" | "send_integer" | "send_string" | "send_mana_type", args: unknown[]) => {
+    send(call, args);
+    answerDialog();
   };
 
   const handlePlayCard = (card: CardView) => {
-    send("play_card", [card.id]);
+    // Confirmed against a real canPlayObjects dump: the response the server expects
+    // is the ABILITY id (e.g. "Play Forest"), not the card's own id - sending the
+    // card id directly doesn't play it.
+    if (!state.game) return;
+    const abilityId = resolvePlayAbilityId(state.game, card.id);
+    if (abilityId) {
+      send("send_uuid", [abilityId]);
+    }
   };
 
   const handlePlayAgain = () => {
@@ -93,7 +101,8 @@ function App() {
         <DialogPrompt
           type={state.pendingDialog.type}
           payload={state.pendingDialog.payload}
-          onChoose={handleDialogChoice}
+          game={state.game}
+          onRespond={handleDialogRespond}
         />
       )}
 

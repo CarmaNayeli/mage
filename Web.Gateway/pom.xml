@@ -30,6 +30,13 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
         </dependency>
+        <dependency>
+            <!-- Lightweight embeddable WebSocket server - no other transitive deps,
+                 which matters since this module ships as a jar-with-dependencies. -->
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.7</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -44,7 +51,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>mage.web.gateway.SmokeTestCli</mainClass>
+                            <mainClass>mage.web.gateway.GatewayServer</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

@@ -4,7 +4,7 @@ import type { CardView, GameView } from "../types/gameView";
 import { Board } from "./Board";
 
 function card(overrides: Partial<CardView> & { id: string; name: string }): CardView {
-  return { types: [], ...overrides };
+  return { cardTypes: [], ...overrides };
 }
 
 const opponentId = "opponent-1";
@@ -42,30 +42,29 @@ const gameView: GameView = {
   turn: 3,
   special: false,
   rollbackTurnsAllowed: false,
+  canPlayObjects: null,
   players: [
     {
       playerId: meId,
       name: "Me",
       life: 20,
-      human: true,
-      inGame: true,
+      isHuman: true,
       hasLeft: false,
       handCount: 1,
       graveyard: { "grave-1": card({ id: "grave-1", name: "Lava Spike" }) },
-      battlefield: { "land-1": card({ id: "land-1", name: "Mountain", types: ["Land"] }) },
-      manaPool: { Red: 2, Blue: 0 },
+      battlefield: { "land-1": card({ id: "land-1", name: "Mountain", cardTypes: ["LAND"] }) },
+      manaPool: { red: 2, blue: 0 },
     },
     {
       playerId: opponentId,
       name: "Practice Bot",
       life: 18,
-      human: false,
-      inGame: true,
+      isHuman: false,
       hasLeft: false,
       handCount: 4,
       graveyard: {},
       battlefield: {
-        "creature-1": card({ id: "creature-1", name: "Grizzly Bears", types: ["Creature"], power: "2", toughness: "2" }),
+        "creature-1": card({ id: "creature-1", name: "Grizzly Bears", cardTypes: ["CREATURE"], power: "2", toughness: "2" }),
       },
     },
   ],

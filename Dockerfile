@@ -52,9 +52,10 @@ WORKDIR /app
 COPY --from=builder /app/server /app/server
 
 COPY --from=builder /build/Web.Gateway/target/mage-web-gateway-*.jar /app/gateway/mage-web-gateway.jar
-COPY Web.Gateway/sample-decks/smoke-test.txt /app/gateway/smoke-test.txt
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-EXPOSE 17171
+# 17171 (raw JBoss Remoting) is intentionally not exposed here - only the gateway
+# process inside this container talks to it (over 127.0.0.1), a browser never does.
+EXPOSE 8080
 ENTRYPOINT ["/app/entrypoint.sh"]

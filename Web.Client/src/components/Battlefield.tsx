@@ -1,16 +1,14 @@
-import type { CardsView } from "../types/gameView";
+import { LAND_CARD_TYPE, type CardsView } from "../types/gameView";
 import { CardTile } from "./CardTile";
 
 interface BattlefieldProps {
   cards: CardsView;
 }
 
-const LAND_TYPE = "Land";
-
 export function Battlefield({ cards }: BattlefieldProps) {
   const list = Object.values(cards);
-  const lands = list.filter((c) => c.types?.includes(LAND_TYPE));
-  const nonLands = list.filter((c) => !c.types?.includes(LAND_TYPE));
+  const lands = list.filter((c) => c.cardTypes?.includes(LAND_CARD_TYPE));
+  const nonLands = list.filter((c) => !c.cardTypes?.includes(LAND_CARD_TYPE));
 
   return (
     <div className="battlefield">

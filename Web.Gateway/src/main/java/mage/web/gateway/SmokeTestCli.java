@@ -98,6 +98,13 @@ public final class SmokeTestCli {
         matchOptions.setDeckType("Constructed - Freeform Unlimited");
         matchOptions.setSkillLevel(SkillLevel.CASUAL);
         matchOptions.setMullgianType(MulliganType.GAME_DEFAULT);
+        // Table.numSeats/seats[] are built from this list at construction time (see
+        // Table.createSeats) - getNextAvailableSeat() then matches joinTable's
+        // PlayerType against a seat's PRE-DECLARED type with `==`, so leaving this
+        // empty (the MatchOptions default) creates a table with zero seats and every
+        // joinTable call fails with "No available seats", exactly what happened here.
+        matchOptions.getPlayerTypes().add(PlayerType.HUMAN);
+        matchOptions.getPlayerTypes().add(PlayerType.LLM_BRIDGE);
 
         UUID tableId = session.createTable(roomId, matchOptions).getTableId();
         System.out.println(">> table created: " + tableId);

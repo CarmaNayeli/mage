@@ -8,21 +8,29 @@ primary_region = 'iad'
 
 [build]
 
-# No [http_service] here on purpose: this app speaks raw JBoss-Remoting on 17171,
-# not HTTP - an http_service block on the same port would have Fly's proxy try to
-# terminate TLS/HTTP against a binary protocol. TCP-only service below instead.
+# Browsers only ever speak WSS to the gateway's WebSocket port (8080) - Fly's proxy
+# terminates TLS and forwards the WS upgrade over plain HTTP internally, which
+# http_service handles natively. Raw JBoss Remoting (17171) is NOT exposed here at
+# all anymore - only the gateway process inside the container talks to it, over
+# 127.0.0.1, so it has no reason to be reachable from outside.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
 
-[[services]]
-  protocol = 'tcp'
-  internal_port = 17171
-
-  [[services.ports]]
-    port = 17171
-
-  [[services.tcp_checks]]
+  # A plain TCP check, not an HTTP one: GatewayServer is a WebSocket-only server, it
+  # doesn't answer arbitrary HTTP GETs the way a real web server would. This also
+  # binds instantly on boot (unlike 17171, which only opens after Mage.Server's
+  # multi-minute first-run card-database rebuild) - health checks pass almost
+  # immediately instead of racing that rebuild, sidestepping the health-check
+  # grace-period issues hit when 17171 was the checked port.
+  [[http_service.checks]]
+    type = 'tcp'
     interval = '15s'
     timeout = '10s'
-    grace_period = '5m0s'
+    grace_period = '30s'
 
 [[vm]]
   memory = '2gb'

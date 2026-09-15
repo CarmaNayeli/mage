@@ -2,15 +2,16 @@
  * The WebSocket message shape, matching mage.web.gateway.ClientCallbackTranslator on
  * the Java side: every server push becomes `{ type, objectId, data }`, where `type`
  * is the name() of a mage.interfaces.callback.ClientCallbackMethod enum constant and
- * `data` is whatever payload that method carries (a GameView, a String, a list of
- * choices, etc. - shape depends on `type`).
+ * `data` is whatever payload that method carries - shape depends on `type`, confirmed
+ * against the real Java source (GameClientMessage/AbilityPickerView/ChoiceImpl), not
+ * guessed.
  *
  * This file is intentionally not exhaustive over every ClientCallbackMethod - only
  * the ones the client actually needs to render something for. Unlisted types still
  * arrive and match the `GatewayEnvelope` fallback case; see gameReducer.ts.
  */
 
-export type ClientCallbackType = "message" | "table_change" | "update" | "dialog" | "client_side_event";
+import type { CardsView, GameView } from "./gameView";
 
 /** The ~35 push types the server can send - see ClientCallbackMethod.java for the full list. */
 export type ClientCallbackMethodName =
@@ -37,7 +38,9 @@ export type ClientCallbackMethodName =
   | "GAME_OVER"
   | "END_GAME_INFO"
   | "USER_REQUEST_DIALOG"
-  | "GAME_REDRAW_GUI";
+  | "GAME_REDRAW_GUI"
+  /** Gateway-originated, not a real ClientCallbackMethod - see GatewaySession.sendGatewayError. */
+  | "GATEWAY_ERROR";
 
 export interface GatewayEnvelope<T = unknown> {
   type: ClientCallbackMethodName | string;
@@ -48,14 +51,52 @@ export interface GatewayEnvelope<T = unknown> {
 }
 
 /**
- * The five dialog-shaped callbacks (GAME_TARGET, GAME_CHOOSE_ABILITY, GAME_ASK,
- * GAME_SELECT, GAME_CHOOSE_CHOICE, GAME_PLAY_MANA, GAME_GET_AMOUNT, ...) all follow
- * the same "engine enumerates, human picks" pattern as the LLM bridge - render the
- * options, send back an index/id. Exact payload shape TBD against a real dump; this
- * is the minimal shape every dialog needs regardless of specifics.
+ * mage.view.GameClientMessage - the payload for most dialog-shaped callbacks. Only a
+ * subset of fields is populated per call site; see the comment on each
+ * ClientCallbackMethodName usage in DialogPrompt.tsx for which ones matter where.
  */
-export interface DialogPayload {
+export interface GameClientMessage {
+  gameView?: GameView;
+  /** GAME_TARGET: the card/permanent being targeted FROM. GAME_CHOOSE_PILE: pile 1. */
+  cardsView1?: CardsView;
+  /** GAME_CHOOSE_PILE: pile 2. */
+  cardsView2?: CardsView;
   message?: string;
-  options?: Array<{ index: number; label: string; [key: string]: unknown }>;
-  [key: string]: unknown;
+  /** GAME_TARGET: whether a target is required (false = a Cancel/pass response is valid). */
+  flag?: boolean;
+  /** GAME_TARGET/GAME_SELECT: legal UUIDs to pick from (Set<UUID> on the Java side). */
+  targets?: string[];
+  min?: number;
+  max?: number;
+  options?: Record<string, unknown>;
+  choice?: ChoiceView;
+  messages?: MultiAmountMessage[];
 }
+
+/** mage.choices.ChoiceImpl's real fields (Gson serializes fields, not getters). */
+export interface ChoiceView {
+  message?: string;
+  subMessage?: string;
+  /** Plain string options - respond with one of these via send_string. */
+  choices?: string[];
+  /** Present instead of `choices` for key/label-style choices - respond with the key. */
+  keyChoices?: Record<string, string>;
+  specialEnabled?: boolean;
+  specialText?: string;
+}
+
+export interface MultiAmountMessage {
+  message?: string;
+  min?: number;
+  max?: number;
+}
+
+/** GAME_CHOOSE_ABILITY's payload - NOT wrapped in GameClientMessage, unlike the rest. */
+export interface AbilityPickerPayload {
+  /** ability/object id -> display label - respond with the chosen key via send_uuid. */
+  choices: Record<string, string>;
+  message?: string;
+  gameView?: GameView;
+}
+
+export type DialogPayload = GameClientMessage | AbilityPickerPayload;
