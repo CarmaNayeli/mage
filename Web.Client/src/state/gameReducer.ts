@@ -1,4 +1,4 @@
-import type { DialogPayload, GatewayEnvelope } from "../types/envelope";
+import type { AccountDeckContent, AccountDeckSummary, AccountLoggedIn, DialogPayload, GatewayEnvelope } from "../types/envelope";
 import type { GameView } from "../types/gameView";
 import { isAutoPassablePriority } from "../utils/autoPass";
 import { extractMessageText, stripHtmlTags } from "../utils/text";
@@ -31,6 +31,24 @@ export interface GameState {
    * duration, which reads as hung once a step takes more than a couple seconds (the
    * AI counter-deck generation step routinely does). */
   joinProgress: string | null;
+  /** Set once logged into an account (register/login/login_with_token) - null means
+   * playing as a guest. Survives "reset" (a Restart/Play Again/Reconnect shouldn't log
+   * you out) - only an explicit "logout" clears it. */
+  account: AccountLoggedIn | null;
+  /** The logged-in account's saved decks (ACCOUNT_DECKS) - null before the first list
+   * arrives (distinct from an empty array, "you have no saved decks"). Also survives
+   * "reset" for the same reason `account` does. */
+  accountDecks: AccountDeckSummary[] | null;
+  /** The most recently loaded account deck (ACCOUNT_DECK) - transient, consumed once
+   * by whatever triggered the load (App.tsx's ref bridge into DeckEntry) and otherwise
+   * ignorable; cleared on "reset" since it's a one-shot signal, not real state. */
+  loadedAccountDeck: AccountDeckContent | null;
+  /** The most recent account-flow failure (bad password, duplicate username, no such
+   * saved deck, ...) - deliberately separate from `lastError` (see ACCOUNT_ERROR's doc
+   * comment in envelope.ts) so AccountModal has its own error source that a stale
+   * connection error can't bleed into, and vice versa. Cleared on a successful login
+   * and whenever the modal is (re)opened fresh. */
+  accountError: string | null;
 }
 
 export const initialGameState: GameState = {
@@ -41,12 +59,18 @@ export const initialGameState: GameState = {
   lastError: null,
   gameOver: null,
   joinProgress: null,
+  account: null,
+  accountDecks: null,
+  loadedAccountDeck: null,
+  accountError: null,
 };
 
 export type GameAction =
   | { kind: "connection-status"; status: ConnectionStatus }
   | { kind: "envelope"; envelope: GatewayEnvelope }
   | { kind: "dialog-answered" }
+  | { kind: "account-deck-consumed" }
+  | { kind: "account-error-cleared" }
   | { kind: "reset" };
 
 const DIALOG_TYPES = new Set([
@@ -74,8 +98,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case "dialog-answered":
       return { ...state, pendingDialog: null };
 
+    case "account-deck-consumed":
+      return { ...state, loadedAccountDeck: null };
+
+    case "account-error-cleared":
+      return { ...state, accountError: null };
+
     case "reset":
-      return initialGameState;
+      // Restart/Play Again/Reconnect all go through this - none of them should log the
+      // player out of their account, so those fields ride through untouched.
+      return { ...initialGameState, account: state.account, accountDecks: state.accountDecks };
 
     case "envelope": {
       const { type, data } = action.envelope;
@@ -142,6 +174,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (GAME_OVER_TYPES.has(type)) {
         return { ...state, gameOver: stripHtmlTags(extractMessageText(data)), pendingDialog: null };
+      }
+
+      if (type === "ACCOUNT_LOGGED_IN") {
+        return { ...state, account: data as AccountLoggedIn, lastError: null, accountError: null };
+      }
+      if (type === "ACCOUNT_LOGGED_OUT") {
+        return { ...state, account: null, accountDecks: null };
+      }
+      if (type === "ACCOUNT_DECKS") {
+        return { ...state, accountDecks: data as AccountDeckSummary[] };
+      }
+      if (type === "ACCOUNT_DECK") {
+        return { ...state, loadedAccountDeck: data as AccountDeckContent };
+      }
+      if (type === "ACCOUNT_SETTINGS") {
+        return state.account ? { ...state, account: { ...state.account, settings: data as AccountLoggedIn["settings"] } } : state;
+      }
+      if (type === "ACCOUNT_ERROR") {
+        return { ...state, accountError: typeof data === "string" ? data : String(data) };
       }
 
       // Unhandled callback type - keep state as-is rather than guessing at its shape.

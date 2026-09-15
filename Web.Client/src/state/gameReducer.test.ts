@@ -199,4 +199,67 @@ describe("gameReducer", () => {
     const failed = gameReducer(withProgress, envelope("GATEWAY_ERROR", "Could not join the table."));
     expect(failed.joinProgress).toBeNull();
   });
+
+  it("logs in on ACCOUNT_LOGGED_IN, also clearing any stale lastError/accountError", () => {
+    const withErrors = { ...initialGameState, lastError: "Could not join the table.", accountError: "Wrong password." };
+    const next = gameReducer(withErrors, envelope("ACCOUNT_LOGGED_IN", { username: "carma", token: "t1", settings: { tableTalk: true } }));
+    expect(next.account).toEqual({ username: "carma", token: "t1", settings: { tableTalk: true } });
+    expect(next.lastError).toBeNull();
+    expect(next.accountError).toBeNull();
+  });
+
+  it("logs out on ACCOUNT_LOGGED_OUT, clearing the account and its deck list", () => {
+    const loggedIn = gameReducer(initialGameState, envelope("ACCOUNT_LOGGED_IN", { username: "carma", token: "t1", settings: {} }));
+    const withDecks = gameReducer(loggedIn, envelope("ACCOUNT_DECKS", [{ name: "Mono Red", format: "standard" }]));
+    const next = gameReducer(withDecks, envelope("ACCOUNT_LOGGED_OUT", null));
+    expect(next.account).toBeNull();
+    expect(next.accountDecks).toBeNull();
+  });
+
+  it("stores the deck list on ACCOUNT_DECKS, including an empty list (distinct from null/never-loaded)", () => {
+    const next = gameReducer(initialGameState, envelope("ACCOUNT_DECKS", []));
+    expect(next.accountDecks).toEqual([]);
+  });
+
+  it("stores a loaded deck on ACCOUNT_DECK for later consumption", () => {
+    const next = gameReducer(initialGameState, envelope("ACCOUNT_DECK", { name: "Mono Red", format: "standard", deck: "20 Mountain" }));
+    expect(next.loadedAccountDeck).toEqual({ name: "Mono Red", format: "standard", deck: "20 Mountain" });
+  });
+
+  it("consumes the loaded account deck on account-deck-consumed", () => {
+    const withDeck = gameReducer(initialGameState, envelope("ACCOUNT_DECK", { name: "Mono Red", format: "standard", deck: "20 Mountain" }));
+    const consumed = gameReducer(withDeck, { kind: "account-deck-consumed" });
+    expect(consumed.loadedAccountDeck).toBeNull();
+  });
+
+  it("merges settings into the logged-in account on ACCOUNT_SETTINGS, ignoring it while logged out", () => {
+    const loggedOut = gameReducer(initialGameState, envelope("ACCOUNT_SETTINGS", { tableTalk: false }));
+    expect(loggedOut.account).toBeNull();
+
+    const loggedIn = gameReducer(initialGameState, envelope("ACCOUNT_LOGGED_IN", { username: "carma", token: "t1", settings: { tableTalk: true } }));
+    const next = gameReducer(loggedIn, envelope("ACCOUNT_SETTINGS", { tableTalk: false }));
+    expect(next.account?.settings).toEqual({ tableTalk: false });
+  });
+
+  it("records an account-flow failure on ACCOUNT_ERROR, separately from lastError", () => {
+    const next = gameReducer(initialGameState, envelope("ACCOUNT_ERROR", "That username is already taken."));
+    expect(next.accountError).toBe("That username is already taken.");
+    expect(next.lastError).toBeNull();
+  });
+
+  it("clears accountError on account-error-cleared", () => {
+    const withError = gameReducer(initialGameState, envelope("ACCOUNT_ERROR", "Incorrect password."));
+    const cleared = gameReducer(withError, { kind: "account-error-cleared" });
+    expect(cleared.accountError).toBeNull();
+  });
+
+  it("preserves the logged-in account and its deck list across a reset (a Restart/Play Again/Reconnect shouldn't log you out)", () => {
+    const loggedIn = gameReducer(initialGameState, envelope("ACCOUNT_LOGGED_IN", { username: "carma", token: "t1", settings: {} }));
+    const withDecks = gameReducer(loggedIn, envelope("ACCOUNT_DECKS", [{ name: "Mono Red", format: "standard" }]));
+    const midGame = gameReducer(withDecks, envelope("GAME_UPDATE", minimalGameView));
+    const reset = gameReducer(midGame, { kind: "reset" });
+    expect(reset.account).toEqual({ username: "carma", token: "t1", settings: {} });
+    expect(reset.accountDecks).toEqual([{ name: "Mono Red", format: "standard" }]);
+    expect(reset.game).toBeNull();
+  });
 });

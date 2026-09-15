@@ -60,11 +60,15 @@ export function useGatewayConnection(url: string | null) {
 
   const reset = useCallback(() => dispatch({ kind: "reset" }), []);
   const answerDialog = useCallback(() => dispatch({ kind: "dialog-answered" }), []);
+  const consumeAccountDeck = useCallback(() => dispatch({ kind: "account-deck-consumed" }), []);
+  const clearAccountError = useCallback(() => dispatch({ kind: "account-error-cleared" }), []);
 
-  return { state, send, reset, answerDialog } satisfies {
+  return { state, send, reset, answerDialog, consumeAccountDeck, clearAccountError } satisfies {
     state: GameState;
     send: (call: string, args?: unknown[]) => void;
     reset: () => void;
     answerDialog: () => void;
+    consumeAccountDeck: () => void;
+    clearAccountError: () => void;
   };
 }

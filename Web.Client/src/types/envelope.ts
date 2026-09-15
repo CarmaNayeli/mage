@@ -42,7 +42,21 @@ export type ClientCallbackMethodName =
   /** Gateway-originated, not a real ClientCallbackMethod - see GatewaySession.sendGatewayError. */
   | "GATEWAY_ERROR"
   /** Gateway-originated - see GatewaySession.sendProgress. */
-  | "GATEWAY_PROGRESS";
+  | "GATEWAY_PROGRESS"
+  /** Gateway-originated - see GatewaySession's "register"/"login"/"login_with_token". */
+  | "ACCOUNT_LOGGED_IN"
+  /** Gateway-originated - see GatewaySession's "logout". */
+  | "ACCOUNT_LOGGED_OUT"
+  /** Gateway-originated - see GatewaySession's "list_decks"/"save_deck"/"delete_deck". */
+  | "ACCOUNT_DECKS"
+  /** Gateway-originated - see GatewaySession's "load_deck". */
+  | "ACCOUNT_DECK"
+  /** Gateway-originated - see GatewaySession's "update_settings". */
+  | "ACCOUNT_SETTINGS"
+  /** Gateway-originated - see GatewaySession.sendAccountError. Deliberately separate
+   * from GATEWAY_ERROR so a failed login doesn't flash in the pre-game "couldn't
+   * connect" banner and vice versa. */
+  | "ACCOUNT_ERROR";
 
 export interface GatewayEnvelope<T = unknown> {
   type: ClientCallbackMethodName | string;
@@ -102,3 +116,33 @@ export interface AbilityPickerPayload {
 }
 
 export type DialogPayload = GameClientMessage | AbilityPickerPayload;
+
+/** ACCOUNT_LOGGED_IN's payload (GatewaySession.handleAccountResult) - fires on a
+ * successful register/login/login_with_token. */
+export interface AccountLoggedIn {
+  username: string;
+  token: string;
+  settings: AccountSettings;
+}
+
+/** Small, arbitrary per-account settings blob (AccountStore.defaultSettings) - only
+ * tableTalk exists today, but the gateway doesn't validate contents, so this stays
+ * open rather than a fixed shape. */
+export interface AccountSettings {
+  tableTalk?: boolean;
+  [key: string]: unknown;
+}
+
+/** One entry in ACCOUNT_DECKS - just enough to list/pick a saved deck; the actual
+ * content only comes down via ACCOUNT_DECK (load_deck), not the list itself. */
+export interface AccountDeckSummary {
+  name: string;
+  format: string | null;
+}
+
+/** ACCOUNT_DECK's payload (a load_deck response). */
+export interface AccountDeckContent {
+  name: string;
+  format: string | null;
+  deck: string;
+}

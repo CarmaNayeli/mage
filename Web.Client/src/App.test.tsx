@@ -162,7 +162,10 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Play again" }));
     expect(screen.getByRole("button", { name: "Start game" })).toBeInTheDocument();
-    expect(socket.closed).toBe(true);
+    // The socket itself stays connected across a reset (an account login shouldn't
+    // need re-establishing just because a match ended) - only a real connection
+    // failure closes it.
+    expect(socket.closed).toBe(false);
   });
 
   it("disables Restart before joining, and sends concede then resets when used mid-game", () => {
@@ -180,7 +183,8 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restart" }));
 
     expect(socket.sent).toContainEqual(JSON.stringify({ call: "concede", args: [] }));
-    expect(socket.closed).toBe(true);
+    // The socket itself stays connected (see the "Play again" test above for why).
+    expect(socket.closed).toBe(false);
     expect(screen.getByRole("button", { name: "Start game" })).toBeInTheDocument();
   });
 
@@ -282,5 +286,106 @@ describe("App", () => {
         args: [{ playerName: "Carma", format: "freeform", playerDeck: "20 Mountain", opponentMode: "basic" }],
       }),
     ]);
+  });
+
+  it("connects eagerly and tries a saved account token as soon as the socket opens, before any table is joined", () => {
+    localStorage.setItem("xeffigy.accountToken", "saved-token");
+    render(<App />);
+
+    const socket = MockWebSocket.instances[0];
+    expect(socket.sent).toEqual([]);
+    act(() => socket.triggerOpen());
+
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "login_with_token", args: ["saved-token"] }));
+  });
+
+  it("logs in through the account modal, persists the token, and lists My Decks from the account instead of localStorage", () => {
+    render(<App />);
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In / Sign Up" }));
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "carma" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "hunter2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "login", args: [{ username: "carma", password: "hunter2" }] }));
+
+    act(() =>
+      socket.triggerMessage({
+        type: "ACCOUNT_LOGGED_IN",
+        objectId: null,
+        data: { username: "carma", token: "real-token", settings: { tableTalk: true } },
+      }),
+    );
+
+    // The modal closes itself once logged in, the token is remembered for next time,
+    // and the deck list is requested (server-backed decks replace the localStorage ones).
+    expect(screen.queryByRole("button", { name: "Log In" })).not.toBeInTheDocument();
+    expect(localStorage.getItem("xeffigy.accountToken")).toBe("real-token");
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "list_decks", args: [] }));
+
+    act(() => socket.triggerMessage({ type: "ACCOUNT_DECKS", objectId: null, data: [{ name: "Mono Red", format: "standard" }] }));
+    expect(screen.getByText(/saved to your account/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Mono Red/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("button", { name: "Log Out (carma)" })).toBeInTheDocument();
+  });
+
+  it("shows an account error inside the modal without disturbing the pre-game connection error state", () => {
+    render(<App />);
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In / Sign Up" }));
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "carma" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
+
+    act(() => socket.triggerMessage({ type: "ACCOUNT_ERROR", objectId: null, data: "Incorrect password." }));
+
+    expect(screen.getByText("Incorrect password.")).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't reach the server/i)).not.toBeInTheDocument();
+  });
+
+  it("logs out via the menu, forgetting the saved token", () => {
+    localStorage.setItem("xeffigy.accountToken", "saved-token");
+    render(<App />);
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() =>
+      socket.triggerMessage({
+        type: "ACCOUNT_LOGGED_IN",
+        objectId: null,
+        data: { username: "carma", token: "saved-token", settings: {} },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log Out (carma)" }));
+
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "logout", args: [] }));
+    expect(localStorage.getItem("xeffigy.accountToken")).toBeNull();
+  });
+
+  it("toggles table talk via the account's server-persisted setting once logged in, instead of localStorage", () => {
+    render(<App />);
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() =>
+      socket.triggerMessage({
+        type: "ACCOUNT_LOGGED_IN",
+        objectId: null,
+        data: { username: "carma", token: "t1", settings: { tableTalk: true } },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Table Talk: On" }));
+
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "update_settings", args: [{ tableTalk: false }] }));
   });
 });

@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import mage.constants.ManaType;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.RangeOfInfluence;
@@ -177,7 +178,7 @@ final class GatewaySession {
                     requireAccount();
                     AccountStore.DeckContent deck = accountStore.loadDeck(accountUsername, args.get(0).getAsString());
                     if (deck == null) {
-                        sendGatewayError("No saved deck named \"" + args.get(0).getAsString() + "\".");
+                        sendAccountError("No saved deck named \"" + args.get(0).getAsString() + "\".");
                     } else {
                         JsonObject data = new JsonObject();
                         data.addProperty("name", deck.name);
@@ -225,7 +226,7 @@ final class GatewaySession {
 
     private void handleAccountResult(AccountStore.AccountResult result) {
         if (!result.ok) {
-            sendGatewayError(result.error);
+            sendAccountError(result.error);
             return;
         }
         accountUsername = result.username;
@@ -408,6 +409,14 @@ final class GatewaySession {
         envelope.add("objectId", null);
         envelope.addProperty("data", message);
         outbound.accept(envelope.toString());
+    }
+
+    /** Kept separate from {@link #sendGatewayError} (a different envelope type, not
+     * just a different message) - both fed the same GATEWAY_ERROR channel would have
+     * meant a failed login flashing in the pre-game "couldn't connect" banner and vice
+     * versa, since the client stores whichever one arrived most recently in one place. */
+    private void sendAccountError(String message) {
+        sendEnvelope("ACCOUNT_ERROR", new JsonPrimitive(message));
     }
 
     /**

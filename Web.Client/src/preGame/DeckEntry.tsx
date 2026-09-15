@@ -25,9 +25,21 @@ interface DeckEntryProps {
    * submenu and this form's own inline "My Decks" panel always agree on what's saved -
    * both read/write through the same list instead of two independent copies. Optional
    * (defaulting to an inert empty list) so callers that don't care about the
-   * cross-component menu sync - tests, mainly - don't need to wire it up. */
+   * cross-component menu sync - tests, mainly - don't need to wire it up.
+   * Ignored (see accountDecks below) once logged into an account. */
   savedDecks?: SavedDeck[];
   onSavedDecksChange?: (decks: SavedDeck[]) => void;
+  /** Non-null (even if empty) once logged into an account - switches "My Decks" from
+   * this browser's localStorage to the account's real, server-stored decks instead.
+   * Only name/format are known up front (the list, not each deck's full content) -
+   * loading one is necessarily async (see onAccountLoadDeck), unlike a localStorage
+   * SavedDeck which already carries everything. */
+  accountDecks?: Array<{ name: string; format: string | null }> | null;
+  onAccountSaveDeck?: (name: string, format: string, deck: string) => void;
+  /** Fire-and-forget - the actual content arrives later over the wire and reaches this
+   * form via the ref's loadDeck, not a return value here. */
+  onAccountLoadDeck?: (name: string) => void;
+  onAccountDeleteDeck?: (name: string) => void;
 }
 
 /** Lets App.tsx's hamburger menu reach into this form for "Load Deck" (from its
@@ -62,14 +74,39 @@ const FORMATS: Array<{ id: string; label: string }> = [
 /** TxtDeckImporter (as Web.Gateway's DeckSubmission calls it) switches everything
  * after the first blank line to the sideboard automatically - no special syntax
  * needed, just a real blank line. That's the only way it recognizes a commander. */
-function withSideboard(deckText: string, sideboardText: string): string {
+export function withSideboard(deckText: string, sideboardText: string): string {
   return sideboardText.trim() ? `${deckText}\n\n${sideboardText}` : deckText;
 }
 
+/** The inverse - an account deck is stored as one combined blob (the same shape
+ * withSideboard produces, since that's also what actually gets submitted to join a
+ * game), but this form's two separate textareas need it split back apart to round-trip
+ * the same way a localStorage SavedDeck already does. Splits on the first blank line,
+ * matching TxtDeckImporter's own convention exactly. */
+export function splitSideboard(combined: string): { playerDeck: string; sideboard: string } {
+  const splitAt = combined.indexOf("\n\n");
+  if (splitAt === -1) {
+    return { playerDeck: combined, sideboard: "" };
+  }
+  return { playerDeck: combined.slice(0, splitAt), sideboard: combined.slice(splitAt + 2) };
+}
+
 export const DeckEntry = forwardRef<DeckEntryHandle, DeckEntryProps>(function DeckEntry(
-  { onSubmit, disabled, error, progress, savedDecks = [], onSavedDecksChange = () => {} },
+  {
+    onSubmit,
+    disabled,
+    error,
+    progress,
+    savedDecks = [],
+    onSavedDecksChange = () => {},
+    accountDecks = null,
+    onAccountSaveDeck = () => {},
+    onAccountLoadDeck = () => {},
+    onAccountDeleteDeck = () => {},
+  },
   ref,
 ) {
+  const usingAccount = accountDecks !== null;
   const [playerName, setPlayerName] = useState("");
   const [format, setFormat] = useState("freeform");
   const [playerDeck, setPlayerDeck] = useState("");
@@ -95,13 +132,35 @@ export const DeckEntry = forwardRef<DeckEntryHandle, DeckEntryProps>(function De
   const handleSaveDeck = () => {
     const name = saveName.trim();
     if (!name) return;
-    onSavedDecksChange(saveDeck({ name, format, playerDeck, sideboard }));
+    if (usingAccount) {
+      onAccountSaveDeck(name, format, withSideboard(playerDeck, sideboard));
+    } else {
+      onSavedDecksChange(saveDeck({ name, format, playerDeck, sideboard }));
+    }
     setSaveName("");
   };
 
   const handleDeleteDeck = (name: string) => {
-    onSavedDecksChange(deleteDeck(name));
+    if (usingAccount) {
+      onAccountDeleteDeck(name);
+    } else {
+      onSavedDecksChange(deleteDeck(name));
+    }
   };
+
+  /** Guest decks (SavedDeck) already carry their full content - apply immediately.
+   * Account decks are just a {name, format} summary in this list - request the real
+   * content and let it arrive later via the ref (App.tsx wires ACCOUNT_DECK to that). */
+  const handleClickSavedDeck = (deck: { name: string; format: string | null }) => {
+    if (usingAccount) {
+      onAccountLoadDeck(deck.name);
+    } else {
+      const full = savedDecks.find((d) => d.name === deck.name);
+      if (full) handleLoadDeck(full);
+    }
+  };
+
+  const myDecks: Array<{ name: string; format: string | null }> = usingAccount ? (accountDecks ?? []) : savedDecks;
 
   const isCommander = format === "commander";
   const needsOpponentDeck = opponentMode === "provide";
@@ -154,15 +213,15 @@ export const DeckEntry = forwardRef<DeckEntryHandle, DeckEntryProps>(function De
       </div>
 
       <div className="my-decks">
-        <h3>My Decks</h3>
-        {savedDecks.length === 0 ? (
+        <h3>My Decks{usingAccount && <span className="deck-entry-hint"> - saved to your account</span>}</h3>
+        {myDecks.length === 0 ? (
           <p className="deck-entry-hint">No saved decks yet - build your deck below, then save it here for next time.</p>
         ) : (
           <ul className="my-decks-list">
-            {savedDecks.map((deck) => (
+            {myDecks.map((deck) => (
               <li key={deck.name}>
-                <button type="button" onClick={() => handleLoadDeck(deck)} disabled={disabled}>
-                  {deck.name} ({FORMATS.find((f) => f.id === deck.format)?.label ?? deck.format})
+                <button type="button" onClick={() => handleClickSavedDeck(deck)} disabled={disabled}>
+                  {deck.name} ({(deck.format && FORMATS.find((f) => f.id === deck.format)?.label) ?? deck.format ?? "any format"})
                 </button>
                 <button
                   type="button"
