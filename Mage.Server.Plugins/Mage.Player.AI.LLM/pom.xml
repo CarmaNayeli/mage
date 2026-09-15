@@ -34,6 +34,11 @@
 
     <build>
         <sourceDirectory>src</sourceDirectory>
+        <!-- Not src/test/java: sourceDirectory above is the whole src tree, scanned
+             recursively by the main compile step - a test dir nested under src would
+             get compiled as main sources (no test-scoped deps like junit-jupiter on
+             that classpath) instead of via the test-compile phase. Sibling dir instead. -->
+        <testSourceDirectory>test</testSourceDirectory>
     </build>
 
     <properties>
