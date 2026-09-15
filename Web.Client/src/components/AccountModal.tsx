@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 interface AccountModalProps {
   onClose: () => void;
@@ -14,9 +14,20 @@ export function AccountModal({ onClose, onLogin, onRegister, error }: AccountMod
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  // The round trip to the gateway (a real network hop, sometimes a slow one) has no
+  // other visible effect until either ACCOUNT_LOGGED_IN closes this modal or
+  // ACCOUNT_ERROR arrives - without this the button just sits there looking inert.
+  const [submitting, setSubmitting] = useState(false);
+
+  // A fresh error means the attempt that was in flight has resolved (unsuccessfully) -
+  // stop showing "Logging in..." so the error and the form are both usable again.
+  useEffect(() => {
+    if (error) setSubmitting(false);
+  }, [error]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     if (mode === "login") onLogin(username, password);
     else onRegister(username, password);
   };
@@ -38,8 +49,8 @@ export function AccountModal({ onClose, onLogin, onRegister, error }: AccountMod
           {error && <div className="deck-entry-error">{error}</div>}
 
           <div className="account-modal-actions">
-            <button type="submit" disabled={!username.trim() || !password}>
-              {mode === "login" ? "Log In" : "Create Account"}
+            <button type="submit" disabled={submitting || !username.trim() || !password}>
+              {submitting ? "Please wait…" : mode === "login" ? "Log In" : "Create Account"}
             </button>
             <button type="button" onClick={onClose}>
               Cancel
@@ -50,7 +61,10 @@ export function AccountModal({ onClose, onLogin, onRegister, error }: AccountMod
         <button
           type="button"
           className="account-modal-switch"
-          onClick={() => setMode((m) => (m === "login" ? "register" : "login"))}
+          onClick={() => {
+            setSubmitting(false);
+            setMode((m) => (m === "login" ? "register" : "login"));
+          }}
         >
           {mode === "login" ? "Need an account? Create one" : "Already have an account? Log in"}
         </button>

@@ -3,6 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import { AccountModal } from "./AccountModal";
 
 describe("AccountModal", () => {
+  it("shows a pending state after submitting, until an error arrives to explain why it stopped", () => {
+    const { rerender } = render(<AccountModal onClose={() => {}} onLogin={() => {}} onRegister={() => {}} error={null} />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "carma" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "hunter2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
+
+    expect(screen.getByRole("button", { name: "Please wait…" })).toBeDisabled();
+
+    rerender(<AccountModal onClose={() => {}} onLogin={() => {}} onRegister={() => {}} error="Incorrect password." />);
+    expect(screen.getByText("Incorrect password.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log In" })).not.toBeDisabled();
+  });
+
   it("logs in with the entered username/password", () => {
     const onLogin = vi.fn();
     render(<AccountModal onClose={() => {}} onLogin={onLogin} onRegister={() => {}} error={null} />);
