@@ -1,4 +1,8 @@
-#!/bin/sh
+#!/bin/bash
+# bash, not sh: eclipse-temurin's /bin/sh is dash, which doesn't support the
+# /dev/tcp/... redirection below - that check silently never succeeded under dash
+# (no error, just never true), so the smoke test never ran even once Mage.Server
+# was actually up and Fly's own (separate) health check was passing.
 set -e
 
 cd /app/server
