@@ -15,11 +15,16 @@ COPY . .
 ENV MAVEN_OPTS="-Xmx3g -XX:+UseG1GC"
 # -am: also build Mage.Server's and Web.Gateway's own dependencies (Mage, Mage.Common,
 # Mage.Sets, the bundled AI/game/deck plugin modules) in the same reactor pass.
-# assembly:single as a second goal, not a phase binding: Mage.Server's own
-# maven-assembly-plugin config has no <executions> - the project's own release
-# script (Utils/build-and-package.pl) runs it this same way, `mvn package
-# assembly:single`, rather than binding it to the package phase for every build.
-RUN mvn -B -pl Mage.Server,Web.Gateway -am -DskipTests package assembly:single
+# `install`, not `package`: the assembly step below runs as a second, separately-
+# scoped mvn invocation (a fresh process), so Mage.Server's dependencies need to
+# already be resolvable from the local repo, not just sitting in sibling target/ dirs.
+RUN mvn -B -pl Mage.Server,Web.Gateway -am -DskipTests install
+# Mage.Server's maven-assembly-plugin config has no <executions> binding it to a
+# phase, so a bare `assembly:single` across the whole reactor (as the project's own
+# release script, Utils/build-and-package.pl, runs it) hits every OTHER module first
+# and fails on the first one with no assembly descriptor (mage-root itself). Scoped
+# to just this module (no -am) instead, resolving its now-installed dependencies.
+RUN mvn -B -pl Mage.Server -DskipTests assembly:single
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
