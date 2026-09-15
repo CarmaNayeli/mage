@@ -1,6 +1,7 @@
 package mage.web.gateway;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import mage.constants.ManaType;
@@ -21,7 +22,6 @@ import org.apache.log4j.Logger;
 
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 /**
  * One instance per browser WebSocket connection - owns a single JBoss-Remoting
@@ -43,7 +43,9 @@ import java.util.regex.Pattern;
 final class GatewaySession {
 
     private static final Logger logger = Logger.getLogger(GatewaySession.class);
-    private static final Pattern INVALID_USERNAME_CHARS = Pattern.compile("[^a-z0-9_]");
+    /** File-backed, stateless, one process (a single Fly machine) - shared across every
+     * session rather than one instance each, same reasoning as the class's own javadoc. */
+    private static final AccountStore accountStore = new AccountStore();
 
     private final String mageHost;
     private final int magePort;
@@ -62,6 +64,11 @@ final class GatewaySession {
      * {@link #onCallback}) - needed to let the player actually talk back, not just
      * receive the game's own log/the bot's table talk. */
     private volatile UUID chatId;
+    /** Set once this connection is logged into an account (see "login"/"register"/
+     * "login_with_token") - null means playing as a guest, same as before accounts
+     * existed at all. */
+    private volatile String accountUsername;
+    private volatile String accountToken;
 
     GatewaySession(String mageHost, int magePort, Consumer<String> outbound) {
         this.mageHost = mageHost;
@@ -126,6 +133,70 @@ final class GatewaySession {
                         session.quitMatch(gameId);
                     }
                     break;
+                case "register":
+                    handleAccountResult(accountStore.register(
+                            getString(args.get(0).getAsJsonObject(), "username", ""),
+                            getString(args.get(0).getAsJsonObject(), "password", "")));
+                    break;
+                case "login":
+                    handleAccountResult(accountStore.login(
+                            getString(args.get(0).getAsJsonObject(), "username", ""),
+                            getString(args.get(0).getAsJsonObject(), "password", "")));
+                    break;
+                case "login_with_token": {
+                    // Silent on failure (an expired/invalid stored token just means
+                    // "play as a guest," not an error worth interrupting anyone with) -
+                    // sent automatically on connect if the browser has a token saved,
+                    // not from a user action.
+                    AccountStore.AccountResult result = accountStore.loginWithToken(args.get(0).getAsString());
+                    if (result != null) {
+                        handleAccountResult(result);
+                    }
+                    break;
+                }
+                case "logout":
+                    accountStore.logout(accountToken);
+                    accountUsername = null;
+                    accountToken = null;
+                    sendEnvelope("ACCOUNT_LOGGED_OUT", null);
+                    break;
+                case "save_deck":
+                    requireAccount();
+                    JsonObject deckToSave = args.get(0).getAsJsonObject();
+                    accountStore.saveDeck(accountUsername,
+                            getString(deckToSave, "name", "deck"),
+                            getString(deckToSave, "format", null),
+                            getString(deckToSave, "deck", ""));
+                    sendDeckList();
+                    break;
+                case "list_decks":
+                    requireAccount();
+                    sendDeckList();
+                    break;
+                case "load_deck": {
+                    requireAccount();
+                    AccountStore.DeckContent deck = accountStore.loadDeck(accountUsername, args.get(0).getAsString());
+                    if (deck == null) {
+                        sendGatewayError("No saved deck named \"" + args.get(0).getAsString() + "\".");
+                    } else {
+                        JsonObject data = new JsonObject();
+                        data.addProperty("name", deck.name);
+                        data.addProperty("format", deck.format);
+                        data.addProperty("deck", deck.deck);
+                        sendEnvelope("ACCOUNT_DECK", data);
+                    }
+                    break;
+                }
+                case "delete_deck":
+                    requireAccount();
+                    accountStore.deleteDeck(accountUsername, args.get(0).getAsString());
+                    sendDeckList();
+                    break;
+                case "update_settings":
+                    requireAccount();
+                    JsonObject settings = accountStore.updateSettings(accountUsername, args.get(0).getAsJsonObject());
+                    sendEnvelope("ACCOUNT_SETTINGS", settings);
+                    break;
                 default:
                     logger.warn("Unknown call from client: " + call);
             }
@@ -146,6 +217,37 @@ final class GatewaySession {
         }
     }
 
+    private void requireAccount() {
+        if (accountUsername == null) {
+            throw new IllegalStateException("Not logged into an account on this connection");
+        }
+    }
+
+    private void handleAccountResult(AccountStore.AccountResult result) {
+        if (!result.ok) {
+            sendGatewayError(result.error);
+            return;
+        }
+        accountUsername = result.username;
+        accountToken = result.token;
+        JsonObject data = new JsonObject();
+        data.addProperty("username", result.username);
+        data.addProperty("token", result.token);
+        data.add("settings", result.settings);
+        sendEnvelope("ACCOUNT_LOGGED_IN", data);
+    }
+
+    private void sendDeckList() {
+        JsonArray decks = new JsonArray();
+        for (AccountStore.DeckSummary deck : accountStore.listDecks(accountUsername)) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("name", deck.name);
+            entry.addProperty("format", deck.format);
+            decks.add(entry);
+        }
+        sendEnvelope("ACCOUNT_DECKS", decks);
+    }
+
     /**
      * {@code request} shape: {@code {playerName, format, playerDeck, opponentMode,
      * opponentDeck?, difficulty?}}. {@code opponentMode} is one of "provide" (use
@@ -155,7 +257,7 @@ final class GatewaySession {
      * {@link CounterDeckGenerator}).
      */
     private void joinPracticeTable(JsonObject request) {
-        String playerName = sanitizeUsername(getString(request, "playerName", ""));
+        String playerName = Usernames.sanitize(getString(request, "playerName", ""));
         Format format = Format.byId(getString(request, "format", "freeform"));
         String playerDeckText = getString(request, "playerDeck", "");
         String opponentMode = getString(request, "opponentMode", "basic");
@@ -322,23 +424,16 @@ final class GatewaySession {
         outbound.accept(envelope.toString());
     }
 
-    /**
-     * config.xml's constraints: 3-14 chars, {@code [^a-z0-9_]} is the invalid-char
-     * pattern (lowercase only) - real visitor-typed names ("Carma") would otherwise
-     * get silently rejected by connectStart with no detail, exactly like
-     * "WebGatewaySmokeTest" did earlier. Cleaning up here beats asking every visitor
-     * to know these arbitrary server-side rules.
-     */
-    private static String sanitizeUsername(String raw) {
-        String lower = (raw == null ? "" : raw).trim().toLowerCase();
-        String cleaned = INVALID_USERNAME_CHARS.matcher(lower).replaceAll("_");
-        if (cleaned.length() < 3) {
-            cleaned = (cleaned + "___").substring(0, 3);
-        }
-        if (cleaned.length() > 14) {
-            cleaned = cleaned.substring(0, 14);
-        }
-        return cleaned;
+    /** Generic gateway-originated push for anything whose payload isn't a bare string
+     * (unlike {@link #sendGatewayError}/{@link #sendProgress}) - the account/deck
+     * responses (ACCOUNT_LOGGED_IN, ACCOUNT_DECKS, ACCOUNT_DECK, ACCOUNT_SETTINGS,
+     * ACCOUNT_LOGGED_OUT) all carry an object, array, or (for logged-out) nothing. */
+    private void sendEnvelope(String type, JsonElement data) {
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("type", type);
+        envelope.add("objectId", null);
+        envelope.add("data", data);
+        outbound.accept(envelope.toString());
     }
 
     private static UserData defaultUserData() {

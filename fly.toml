@@ -43,3 +43,11 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 2048
+
+# Account/deck data (see mage.web.gateway.storage.AccountStore) - plain files, not a
+# database. Fly volumes are pinned to a single machine, which is exactly why this app
+# is scaled to 1 machine now (see `fly scale count 1`) - a second machine wouldn't see
+# this volume's data at all.
+[mounts]
+  source = 'xeffigy_data'
+  destination = '/data'
