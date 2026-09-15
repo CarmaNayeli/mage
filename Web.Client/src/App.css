@@ -111,8 +111,9 @@
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  min-width: 140px;
-  overflow: hidden;
+  min-width: 180px;
+  max-height: 70vh;
+  overflow-y: auto;
   z-index: 15;
 
   button {
@@ -121,12 +122,31 @@
     background: none;
     text-align: left;
     padding: 10px 14px;
+    width: 100%;
 
     &:hover:not(:disabled) {
       background: var(--accent-bg);
       color: var(--text-h);
     }
   }
+}
+
+.hamburger-submenu-items {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+
+  button {
+    padding-left: 26px;
+    font-size: 0.9rem;
+  }
+}
+
+.hamburger-submenu-empty {
+  padding: 8px 14px 8px 26px;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--text);
 }
 
 /* Deck entry */

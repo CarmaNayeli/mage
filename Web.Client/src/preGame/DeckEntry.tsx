@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { deleteDeck, listSavedDecks, saveDeck, type SavedDeck } from "../utils/savedDecks";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { deleteDeck, saveDeck, type SavedDeck } from "../utils/savedDecks";
 
 export type OpponentMode = "provide" | "basic" | "counter";
 export type Difficulty = "easy" | "medium" | "hard";
@@ -21,6 +21,23 @@ interface DeckEntryProps {
    * instead of a static "Joining..." for the whole (sometimes tens-of-seconds-long,
    * for AI counter-deck generation) duration. */
   progress?: string | null;
+  /** Owned by App.tsx (not local state here) so the hamburger menu's "Load Deck"
+   * submenu and this form's own inline "My Decks" panel always agree on what's saved -
+   * both read/write through the same list instead of two independent copies. Optional
+   * (defaulting to an inert empty list) so callers that don't care about the
+   * cross-component menu sync - tests, mainly - don't need to wire it up. */
+  savedDecks?: SavedDeck[];
+  onSavedDecksChange?: (decks: SavedDeck[]) => void;
+}
+
+/** Lets App.tsx's hamburger menu reach into this form for "Load Deck" (from its
+ * submenu) and "Save Deck" (reads the current fields to save) without lifting every
+ * field of the form up as controlled props - only the saved-decks *list* is shared
+ * state (see savedDecks/onSavedDecksChange above); the in-progress form values stay
+ * local to this component. */
+export interface DeckEntryHandle {
+  loadDeck: (deck: SavedDeck) => void;
+  getCurrentDeck: () => { format: string; playerDeck: string; sideboard: string };
 }
 
 const PLACEHOLDER = `Paste a decklist, one card per line, e.g.:
@@ -49,7 +66,10 @@ function withSideboard(deckText: string, sideboardText: string): string {
   return sideboardText.trim() ? `${deckText}\n\n${sideboardText}` : deckText;
 }
 
-export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProps) {
+export const DeckEntry = forwardRef<DeckEntryHandle, DeckEntryProps>(function DeckEntry(
+  { onSubmit, disabled, error, progress, savedDecks = [], onSavedDecksChange = () => {} },
+  ref,
+) {
   const [playerName, setPlayerName] = useState("");
   const [format, setFormat] = useState("freeform");
   const [playerDeck, setPlayerDeck] = useState("");
@@ -59,7 +79,6 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
   const [opponentSideboard, setOpponentSideboard] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
 
-  const [savedDecks, setSavedDecks] = useState<SavedDeck[]>(() => listSavedDecks());
   const [saveName, setSaveName] = useState("");
 
   const handleLoadDeck = (deck: SavedDeck) => {
@@ -68,15 +87,20 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
     setSideboard(deck.sideboard);
   };
 
+  useImperativeHandle(ref, () => ({
+    loadDeck: handleLoadDeck,
+    getCurrentDeck: () => ({ format, playerDeck, sideboard }),
+  }));
+
   const handleSaveDeck = () => {
     const name = saveName.trim();
     if (!name) return;
-    setSavedDecks(saveDeck({ name, format, playerDeck, sideboard }));
+    onSavedDecksChange(saveDeck({ name, format, playerDeck, sideboard }));
     setSaveName("");
   };
 
   const handleDeleteDeck = (name: string) => {
-    setSavedDecks(deleteDeck(name));
+    onSavedDecksChange(deleteDeck(name));
   };
 
   const isCommander = format === "commander";
@@ -280,4 +304,4 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
       {disabled && progress && <div className="deck-entry-progress">{progress}</div>}
     </div>
   );
-}
+});

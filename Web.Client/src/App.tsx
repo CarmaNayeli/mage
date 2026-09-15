@@ -1,13 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import "./App.css";
 import logo from "./assets/xeffigy-logo.png";
 import { Board } from "./components/Board";
 import { DialogPrompt } from "./components/DialogPrompt";
 import { GameOverBanner } from "./components/GameOverBanner";
 import { HamburgerMenu } from "./components/HamburgerMenu";
-import { DeckEntry, type JoinRequest } from "./preGame/DeckEntry";
+import { DeckEntry, type DeckEntryHandle, type JoinRequest } from "./preGame/DeckEntry";
 import type { CardView } from "./types/gameView";
 import { getCombatSelection } from "./utils/combat";
+import { listSavedDecks, saveDeck, type SavedDeck } from "./utils/savedDecks";
 import { loadTableTalk, saveTableTalk } from "./utils/settings";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
@@ -26,6 +27,26 @@ function App() {
   const [connectAttempt, setConnectAttempt] = useState(0);
   const wsUrl = connect ? `${GATEWAY_URL}?attempt=${connectAttempt}` : null;
   const { state, send, reset, answerDialog } = useGatewayConnection(wsUrl);
+
+  // The saved-decks *list* lives here (not inside DeckEntry) so the hamburger menu's
+  // "Load Deck" submenu and DeckEntry's own inline "My Decks" panel always show the
+  // same thing - DeckEntry still owns the actual in-progress form fields, reached via
+  // this ref for "Load"/"Save" triggered from the menu instead of a click inside the
+  // form itself.
+  const [savedDecks, setSavedDecks] = useState<SavedDeck[]>(() => listSavedDecks());
+  const deckEntryRef = useRef<DeckEntryHandle>(null);
+
+  const handleMenuSaveDeck = () => {
+    const current = deckEntryRef.current?.getCurrentDeck();
+    if (!current || !current.playerDeck.trim()) return;
+    const name = window.prompt("Name this deck:")?.trim();
+    if (!name) return;
+    setSavedDecks(saveDeck({ name, ...current }));
+  };
+
+  const handleMenuLoadDeck = (deck: SavedDeck) => {
+    deckEntryRef.current?.loadDeck(deck);
+  };
 
   const toggleTableTalk = () => {
     setTableTalk((current) => {
@@ -140,6 +161,20 @@ function App() {
           items={[
             { label: "Restart", onClick: handleRestart, disabled: !connect },
             { label: tableTalk ? "Table Talk: On" : "Table Talk: Off", onClick: toggleTableTalk },
+            // Only meaningful pre-game (DeckEntry, and the ref that reaches it, only
+            // exist then) - mid-game there's no deck form left to save from or load into.
+            ...(!state.game
+              ? [
+                  { label: "Save Deck", onClick: handleMenuSaveDeck },
+                  {
+                    label: "Load Deck",
+                    submenu: savedDecks.map((deck) => ({
+                      label: `${deck.name} (${deck.format})`,
+                      onClick: () => handleMenuLoadDeck(deck),
+                    })),
+                  },
+                ]
+              : []),
           ]}
         />
       </header>
@@ -153,10 +188,13 @@ function App() {
             it can bluff, block, and sequence its turns like a real, if occasionally weird, opponent.
           </p>
           <DeckEntry
+            ref={deckEntryRef}
             onSubmit={handleDeckSubmit}
             disabled={joining}
             error={connectionFailed ? "Couldn't reach the server - check the gateway is running and try again." : state.lastError}
             progress={joining ? state.joinProgress : null}
+            savedDecks={savedDecks}
+            onSavedDecksChange={setSavedDecks}
           />
         </>
       ) : (

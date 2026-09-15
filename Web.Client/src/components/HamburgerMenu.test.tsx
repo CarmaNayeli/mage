@@ -35,4 +35,28 @@ describe("HamburgerMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
     expect(screen.getByRole("button", { name: "Restart" })).toBeDisabled();
   });
+
+  it("expands a submenu without closing the whole menu, then fires the chosen entry and closes on it", () => {
+    const onLoad = vi.fn();
+    render(<HamburgerMenu items={[{ label: "Load Deck", submenu: [{ label: "Gruul Aggro", onClick: onLoad }] }]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.queryByRole("button", { name: "Gruul Aggro" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Load Deck/ }));
+    expect(screen.getByRole("button", { name: "Gruul Aggro" })).toBeInTheDocument();
+    // Still open - expanding a submenu isn't the same as picking an item.
+    expect(screen.getByRole("button", { name: /Load Deck/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Gruul Aggro" }));
+    expect(onLoad).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Load Deck/ })).not.toBeInTheDocument();
+  });
+
+  it("shows a placeholder when a submenu has nothing in it", () => {
+    render(<HamburgerMenu items={[{ label: "Load Deck", submenu: [] }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: /Load Deck/ }));
+    expect(screen.getByText("Nothing saved yet")).toBeInTheDocument();
+  });
 });

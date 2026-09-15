@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { installMockWebSocket, MockWebSocket } from "./test/mockWebSocket";
 import type { GameView } from "./types/gameView";
@@ -50,6 +50,75 @@ describe("App", () => {
     expect(document.querySelector(".app-intro")?.textContent).toMatch(/XMage/);
     expect(document.querySelector(".app-intro")?.textContent).toMatch(/Claude/);
     expect(screen.getByRole("button", { name: "Start game" })).toBeInTheDocument();
+  });
+
+  it("saves a deck via the menu (prompting for a name) and lists it in the menu's Load Deck submenu", () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText("Decklist"), { target: { value: "20 Mountain\n20 Forest" } });
+
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("Gruul Aggro");
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Deck" }));
+    expect(promptSpy).toHaveBeenCalled();
+
+    // The inline "My Decks" panel picks up the same save immediately (shared list).
+    expect(screen.getByRole("button", { name: /^Gruul Aggro/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: /Load Deck/ }));
+    // The submenu's label uses the raw format id ("freeform"), the inline panel's own
+    // list uses the friendly one ("Freeform (no restrictions)") - distinct strings,
+    // so this only matches the submenu entry even with both lists visible at once.
+    expect(screen.getByRole("button", { name: "Gruul Aggro (freeform)" })).toBeInTheDocument();
+    promptSpy.mockRestore();
+  });
+
+  it("doesn't save via the menu when the deck is empty or the name prompt is cancelled", () => {
+    render(<App />);
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("Empty Deck");
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Deck" }));
+    expect(promptSpy).not.toHaveBeenCalled(); // no decklist typed yet - never even asked
+
+    fireEvent.change(screen.getByLabelText("Decklist"), { target: { value: "20 Mountain" } });
+    promptSpy.mockReturnValue(null); // user cancels the name prompt
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Deck" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: /Load Deck/ }));
+    expect(screen.getByText("Nothing saved yet")).toBeInTheDocument();
+    promptSpy.mockRestore();
+  });
+
+  it("loads a deck picked from the menu's Load Deck submenu into the form", () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Carma" } });
+    fireEvent.change(screen.getByLabelText("Decklist"), { target: { value: "20 Mountain" } });
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("Mono Red");
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Deck" }));
+    promptSpy.mockRestore();
+
+    fireEvent.change(screen.getByLabelText("Decklist"), { target: { value: "something else entirely" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: /Load Deck/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Mono Red (freeform)" }));
+
+    expect(screen.getByLabelText("Decklist")).toHaveValue("20 Mountain");
+  });
+
+  it("hides Save Deck/Load Deck from the menu once a game has started", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.queryByRole("button", { name: "Save Deck" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Load Deck/ })).not.toBeInTheDocument();
   });
 
   it("waits for the socket to open before sending the join, not synchronously on submit", () => {

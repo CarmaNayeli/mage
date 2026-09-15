@@ -1,10 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listSavedDecks, type SavedDeck } from "../utils/savedDecks";
 import { DeckEntry } from "./DeckEntry";
 
 function fillForm(name: string, decklist: string) {
   fireEvent.change(screen.getByLabelText("Your name"), { target: { value: name } });
   fireEvent.change(screen.getByLabelText("Decklist"), { target: { value: decklist } });
+}
+
+/** Mirrors how App.tsx actually owns the saved-decks list (DeckEntry itself no longer
+ * does) - only needed by the save/load/delete tests below. */
+function DeckEntryWithSavedDecks() {
+  const [savedDecks, setSavedDecks] = useState<SavedDeck[]>(() => listSavedDecks());
+  return <DeckEntry onSubmit={() => {}} savedDecks={savedDecks} onSavedDecksChange={setSavedDecks} />;
 }
 
 beforeEach(() => {
@@ -157,7 +166,7 @@ describe("DeckEntry", () => {
   });
 
   it("saves the current deck under a name, then loads it back later", () => {
-    const { unmount } = render(<DeckEntry onSubmit={() => {}} />);
+    const { unmount } = render(<DeckEntryWithSavedDecks />);
     fillForm("Carma", "20 Mountain\n20 Forest");
     fireEvent.change(screen.getByPlaceholderText("Name this deck to save it"), { target: { value: "Gruul Aggro" } });
     fireEvent.click(screen.getByRole("button", { name: "Save current deck" }));
@@ -165,13 +174,13 @@ describe("DeckEntry", () => {
     unmount();
 
     // Re-mounting simulates a later visit - the deck should still be there via localStorage.
-    render(<DeckEntry onSubmit={() => {}} />);
+    render(<DeckEntryWithSavedDecks />);
     fireEvent.click(screen.getByRole("button", { name: /^Gruul Aggro/ }));
     expect(screen.getByLabelText("Decklist")).toHaveValue("20 Mountain\n20 Forest");
   });
 
   it("deletes a saved deck", () => {
-    render(<DeckEntry onSubmit={() => {}} />);
+    render(<DeckEntryWithSavedDecks />);
     fillForm("Carma", "20 Mountain");
     fireEvent.change(screen.getByPlaceholderText("Name this deck to save it"), { target: { value: "Mono Red" } });
     fireEvent.click(screen.getByRole("button", { name: "Save current deck" }));
