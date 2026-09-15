@@ -1,5 +1,4 @@
-10 Mountain
-10 Forest
-4 Lightning Bolt
+14 Mountain
+14 Forest
 2 Balduvian Bears
 4 Grizzly Bears
