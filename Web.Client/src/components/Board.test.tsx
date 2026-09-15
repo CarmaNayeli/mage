@@ -89,10 +89,13 @@ describe("Board", () => {
 
   it("renders the hand, graveyard, stack, and mana pool zones (Exile lives in App's sidebar now, not here)", () => {
     render(<Board game={gameView} />);
-    expect(screen.getByText("Lightning Bolt")).toBeInTheDocument();
-    expect(screen.getByText("Lava Spike")).toBeInTheDocument();
+    // getByTitle, not getByText - CardTile now tries a Scryfall image before falling
+    // back to text (see CardTile.test.tsx), so these fixtures (no expansionSetCode/
+    // cardNumber) render as <img>s in this environment, not plain text.
+    expect(screen.getByTitle("Lightning Bolt")).toBeInTheDocument();
+    expect(screen.getByTitle("Lava Spike")).toBeInTheDocument();
     expect(screen.getByText("Graveyard (1)")).toBeInTheDocument();
-    expect(screen.getByText("Counterspell")).toBeInTheDocument();
+    expect(screen.getByTitle("Counterspell")).toBeInTheDocument();
     expect(screen.getByText("2R")).toBeInTheDocument();
   });
 
@@ -100,23 +103,23 @@ describe("Board", () => {
     const onPlayCard = vi.fn();
     render(<Board game={gameView} onPlayCard={onPlayCard} playableIds={new Set(["hand-1", "land-1"])} />);
 
-    screen.getByText("Lightning Bolt").click();
+    screen.getByTitle("Lightning Bolt").click();
     expect(onPlayCard).toHaveBeenCalledWith(gameView.myHand["hand-1"]);
 
-    screen.getByText("Mountain").click();
+    screen.getByTitle("Mountain").click();
     expect(onPlayCard).toHaveBeenCalledWith(gameView.players[0].battlefield["land-1"]);
 
     // Not in playableIds - opponent's creature - clicking it must not fire onPlayCard.
     onPlayCard.mockClear();
-    screen.getByText("Grizzly Bears").click();
+    screen.getByTitle("Grizzly Bears").click();
     expect(onPlayCard).not.toHaveBeenCalled();
   });
 
   it("doesn't make cards clickable at all when nothing is playable", () => {
     const onPlayCard = vi.fn();
     render(<Board game={gameView} onPlayCard={onPlayCard} />);
-    screen.getByText("Lightning Bolt").click();
-    screen.getByText("Mountain").click();
+    screen.getByTitle("Lightning Bolt").click();
+    screen.getByTitle("Mountain").click();
     expect(onPlayCard).not.toHaveBeenCalled();
   });
 

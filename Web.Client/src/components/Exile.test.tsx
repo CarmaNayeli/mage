@@ -26,6 +26,9 @@ describe("Exile", () => {
       />,
     );
     expect(screen.getByText("Exile")).toBeInTheDocument();
-    expect(screen.getByText("Swords to Plowshares")).toBeInTheDocument();
+    // getByTitle, not getByText - CardTile tries a Scryfall image before falling back
+    // to text (see CardTile.test.tsx), so this fixture (no expansionSetCode/
+    // cardNumber) renders as an <img> in this environment, not plain text.
+    expect(screen.getByTitle("Swords to Plowshares")).toBeInTheDocument();
   });
 });

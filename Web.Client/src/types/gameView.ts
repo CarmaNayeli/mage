@@ -148,3 +148,11 @@ export function scryfallImageUrl(card: Pick<CardView, "expansionSetCode" | "card
   }
   return `https://api.scryfall.com/cards/${card.expansionSetCode.toLowerCase()}/${card.cardNumber}/en?format=image`;
 }
+
+/** Fallback for when expansionSetCode/cardNumber is missing, or Scryfall doesn't
+ * recognize that exact set+number combo (both real cases - some prints/promos aren't
+ * indexed the same way) - a fuzzy name search almost always finds *some* printing to
+ * show, which beats a plain text tile for a card that's otherwise rendering fine. */
+export function scryfallNamedImageUrl(name: string): string {
+  return `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}&format=image`;
+}
