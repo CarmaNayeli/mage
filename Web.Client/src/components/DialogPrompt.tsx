@@ -18,6 +18,10 @@ interface DialogPromptProps {
   onHover?: (card: CardView | null) => void;
 }
 
+/** GAME_CHOOSE_CHOICE only gets a search box once it has more options than this - a
+ * handful of colors/modes reads fine as plain buttons. */
+const CHOICE_SEARCH_THRESHOLD = 8;
+
 /** Label -> the matching key in PlayerView.manaPool (confirmed against a real payload -
  * lowercase color names, "colorless" instead of "Generic"). */
 const MANA_TYPES: Array<[string, string]> = [
@@ -66,6 +70,12 @@ function findCardName(game: GameView | null, id: string): string {
 
 export function DialogPrompt({ type, payload, game, onRespond, onHover }: DialogPromptProps) {
   const [amount, setAmount] = useState("");
+  // GAME_CHOOSE_CHOICE's list (e.g. Cavern of Souls' "choose a creature type") can run
+  // into the hundreds of options - reset whenever a new question arrives (this
+  // component stays mounted across different dialogs in sequence, so stale filter text
+  // would otherwise silently carry over into the next, unrelated choice).
+  const [choiceFilter, setChoiceFilter] = useState("");
+  useEffect(() => setChoiceFilter(""), [payload]);
   const rawMessage = isAbilityPicker(type, payload) ? payload.message : (payload as GameClientMessage).message;
   const message = rawMessage ? stripHtmlTags(rawMessage) : rawMessage;
 
@@ -252,18 +262,36 @@ export function DialogPrompt({ type, payload, game, onRespond, onHover }: Dialog
 
       case "GAME_CHOOSE_CHOICE": {
         const choice = gcm.choice;
-        if (choice?.keyChoices) {
-          return Object.entries(choice.keyChoices).map(([key, label]) => (
-            <button key={key} onClick={() => onRespond("send_string", [key])}>
-              {label}
-            </button>
-          ));
-        }
-        return (choice?.choices ?? []).map((value) => (
-          <button key={value} onClick={() => onRespond("send_string", [value])}>
-            {value}
-          </button>
-        ));
+        // [responseValue, displayLabel] - keyChoices sends the key back, a plain
+        // choices list sends the value itself back (both via send_string).
+        const entries: Array<[string, string]> = choice?.keyChoices
+          ? Object.entries(choice.keyChoices)
+          : (choice?.choices ?? []).map((value) => [value, value]);
+        const needle = choiceFilter.trim().toLowerCase();
+        const filtered = needle ? entries.filter(([, label]) => label.toLowerCase().includes(needle)) : entries;
+        return (
+          <>
+            {/* A search box only earns its keep once scrolling/hunting is actually a
+                problem (e.g. Cavern of Souls' ~300 creature types) - a 3-option color
+                choice doesn't need one. */}
+            {entries.length > CHOICE_SEARCH_THRESHOLD && (
+              <input
+                type="text"
+                className="dialog-choice-search"
+                placeholder="Search…"
+                value={choiceFilter}
+                onChange={(e) => setChoiceFilter(e.target.value)}
+                autoFocus
+              />
+            )}
+            {filtered.map(([key, label]) => (
+              <button key={key} onClick={() => onRespond("send_string", [key])}>
+                {label}
+              </button>
+            ))}
+            {entries.length > 0 && filtered.length === 0 && <div className="dialog-choice-empty">No matches</div>}
+          </>
+        );
       }
 
       case "GAME_PLAY_MANA": {

@@ -159,6 +159,56 @@ describe("DialogPrompt", () => {
     expect(onRespond).toHaveBeenCalledWith("send_string", ["blue"]);
   });
 
+  it("doesn't show a search box for a small GAME_CHOOSE_CHOICE list", () => {
+    render(
+      <DialogPrompt
+        type="GAME_CHOOSE_CHOICE"
+        payload={{ choice: { keyChoices: { red: "Red", blue: "Blue" } } }}
+        game={null}
+        onRespond={noop}
+      />,
+    );
+    expect(screen.queryByPlaceholderText("Search…")).not.toBeInTheDocument();
+  });
+
+  it("shows a search box and filters a large GAME_CHOOSE_CHOICE list (e.g. Cavern of Souls' creature types)", () => {
+    const onRespond = vi.fn();
+    const creatureTypes = ["Zombie", "Human", "Goblin", "Elf", "Merfolk", "Vampire", "Wurm", "Dragon", "Sliver"];
+    render(
+      <DialogPrompt
+        type="GAME_CHOOSE_CHOICE"
+        payload={{ choice: { choices: creatureTypes } }}
+        game={null}
+        onRespond={onRespond}
+      />,
+    );
+
+    expect(creatureTypes.length).toBeGreaterThan(8); // above the search-box threshold
+    creatureTypes.forEach((t) => expect(screen.getByRole("button", { name: t })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "zom" } });
+    expect(screen.getByRole("button", { name: "Zombie" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Human" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Zombie" }));
+    expect(onRespond).toHaveBeenCalledWith("send_string", ["Zombie"]);
+  });
+
+  it("shows a 'No matches' message when the search filters out everything", () => {
+    const creatureTypes = ["Zombie", "Human", "Goblin", "Elf", "Merfolk", "Vampire", "Wurm", "Dragon", "Sliver"];
+    render(
+      <DialogPrompt
+        type="GAME_CHOOSE_CHOICE"
+        payload={{ choice: { choices: creatureTypes } }}
+        game={null}
+        onRespond={noop}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "xyz" } });
+    expect(screen.getByText("No matches")).toBeInTheDocument();
+  });
+
   it("renders GAME_GET_AMOUNT as a number form, responding with send_integer", () => {
     const onRespond = vi.fn();
     render(<DialogPrompt type="GAME_GET_AMOUNT" payload={{ min: 0, max: 5 }} game={null} onRespond={onRespond} />);
