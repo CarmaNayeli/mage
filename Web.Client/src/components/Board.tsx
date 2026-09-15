@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { CardView, GameView } from "../types/gameView";
 import { CardZoom } from "./CardZoom";
 import { Exile } from "./Exile";
@@ -18,14 +18,9 @@ interface BoardProps {
    * cards have no way to be clicked at all (only hand cards did, until combat -
    * declaring attackers/blockers - needed to click permanents too). */
   playableIds?: Set<string>;
-  /** Rendered between the shared middle of the table (stack/exile) and the player's
-   * own row - App.tsx builds the Turn Tracker + Game Log here, matching where a real
-   * MTG table's shared zone actually sits, instead of a separate sidebar column that
-   * used to run out of content long before the board did and just wasted the width. */
-  centerContent?: ReactNode;
 }
 
-export function Board({ game, onPlayCard, playableIds, centerContent }: BoardProps) {
+export function Board({ game, onPlayCard, playableIds }: BoardProps) {
   // Defensive: every payload shape assumed here has already been wrong once for real
   // (GAME_UPDATE_AND_INFORM's wrapper crashed this exact line in production) - a
   // missing/malformed field should degrade gracefully, not take the whole app down.
@@ -101,8 +96,6 @@ export function Board({ game, onPlayCard, playableIds, centerContent }: BoardPro
 
       <Stack cards={game.stack} onHover={setHoveredCard} />
       <Exile exiles={game.exiles} onHover={setHoveredCard} />
-
-      {centerContent && <div className="board-center">{centerContent}</div>}
 
       {me && (
         <div className="me">

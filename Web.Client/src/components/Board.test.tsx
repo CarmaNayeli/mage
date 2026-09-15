@@ -158,18 +158,6 @@ describe("Board", () => {
     expect(onPlayCard).toHaveBeenCalledWith(gameView.players[0].battlefield["land-1"]);
   });
 
-  it("renders centerContent between the stack/exile and the player's own row - the shared middle of the table", () => {
-    render(<Board game={gameView} centerContent={<div data-testid="center-marker">Turn Tracker + Log</div>} />);
-    const center = screen.getByTestId("center-marker");
-    expect(center).toBeInTheDocument();
-    // Exile ("Swords to Plowshares") comes before it, the player's own row ("Me") after -
-    // DOM order is document order, so comparePosition confirms the actual placement.
-    const exileCard = screen.getByText("Swords to Plowshares");
-    const myRow = screen.getByText("Me").closest(".player-panel") as Element;
-    expect(exileCard.compareDocumentPosition(center) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(center.compareDocumentPosition(myRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
   it("shows a player's commander in a dedicated Commander zone, ignoring non-Commander command-zone entries", () => {
     const withCommander: GameView = {
       ...gameView,
