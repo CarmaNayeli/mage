@@ -21,8 +21,14 @@ SERVER_PID=$!
 # versions did. A join_practice_table request that arrives before Mage.Server has
 # finished its card-database rebuild (first boot only, a few minutes) will just fail
 # its connectStart and report a gateway error to that browser; it works on retry.
+#
+# -Djava.net.preferIPv4Stack=true: without this, `new InetSocketAddress("0.0.0.0",
+# port)` ends up bound on the IPv6 wildcard only (confirmed via `fly ssh console` +
+# /proc/net/tcp6 - the process and port were both genuinely fine, but absent from
+# /proc/net/tcp entirely). Fly's health check probes over IPv4 and got a flat
+# "connection refused" against an otherwise perfectly healthy process.
 echo "=== starting gateway WebSocket server on 8080 ==="
-java $JAVA_OPENS -jar /app/gateway/mage-web-gateway.jar 8080 127.0.0.1 17171 &
+java $JAVA_OPENS -Djava.net.preferIPv4Stack=true -jar /app/gateway/mage-web-gateway.jar 8080 127.0.0.1 17171 &
 GATEWAY_PID=$!
 
 # Exit (letting Fly restart the machine) if EITHER top-level process dies, rather than
