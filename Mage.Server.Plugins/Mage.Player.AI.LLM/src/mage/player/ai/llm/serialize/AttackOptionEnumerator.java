@@ -43,6 +43,15 @@ public final class AttackOptionEnumerator {
         }
     }
 
+    /**
+     * True if there's at least one legal (attacker, defender) pair - lets a caller skip
+     * asking anything at all (an LLM call included) when combat genuinely has nothing
+     * to declare, the same way a zero-option priority check does.
+     */
+    public static boolean hasAnyOptions(Game game, UUID attackingPlayerId, Map<UUID, Integer> seats) {
+        return !pairs(game, attackingPlayerId, seats).isEmpty();
+    }
+
     public static JsonArray enumerate(Game game, UUID attackingPlayerId, Map<UUID, Integer> seats) {
         JsonArray options = new JsonArray();
         int index = 0;

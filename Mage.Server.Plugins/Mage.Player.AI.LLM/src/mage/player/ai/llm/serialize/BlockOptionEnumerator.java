@@ -45,6 +45,15 @@ public final class BlockOptionEnumerator {
         }
     }
 
+    /**
+     * True if there's at least one legal (blocker, attacker) pair - lets a caller skip
+     * asking anything at all (an LLM call included) when there's genuinely nothing to
+     * declare (no attackers came at you, or nothing you control can block any of them).
+     */
+    public static boolean hasAnyOptions(Game game, UUID defendingPlayerId) {
+        return !pairs(game, defendingPlayerId).isEmpty();
+    }
+
     public static JsonArray enumerate(Game game, UUID defendingPlayerId) {
         JsonArray options = new JsonArray();
         int index = 0;

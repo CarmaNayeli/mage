@@ -430,6 +430,18 @@ public class LLMBridgePlayer extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         logCall("selectAttackers");
+        // Same shape as priority()'s empty-playable check: nothing can legally attack
+        // (no creatures, everything's tapped/sick, no legal defender) isn't a judgment
+        // call at all, so it shouldn't cost an LLM call - every combat step on every
+        // turn was paying for one regardless, even the ones where declaring "no
+        // attackers" was the only possible outcome.
+        Map<UUID, Integer> seats = GameStateSerializer.assignSeats(game);
+        if (!AttackOptionEnumerator.hasAnyOptions(game, attackingPlayerId, seats)) {
+            recordHistory(game, "declared no attackers (nothing could legally attack, no LLM call)");
+            super.selectAttackers(game, attackingPlayerId);
+            return;
+        }
+
         JsonObject envelope = GameStateSerializer.serializeDeclareAttackers(
                 game, this, "Declare attackers for combat.", notes, historySnapshot());
         Optional<LLMDecisionResponse> maybe = decide(game, envelope);
@@ -444,7 +456,6 @@ public class LLMBridgePlayer extends ComputerPlayer {
                 .map(c -> c.secondIndex)
                 .collect(Collectors.toSet());
 
-        Map<UUID, Integer> seats = GameStateSerializer.assignSeats(game);
         int declared = 0;
         for (int index : selected) {
             if (rejected.contains(index)) {
@@ -462,6 +473,15 @@ public class LLMBridgePlayer extends ComputerPlayer {
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         logCall("selectBlockers");
+        // Same reasoning as selectAttackers: no attacker is aimed at this player, or
+        // nothing they control can legally block any of them - not a judgment call,
+        // skip the LLM call.
+        if (!BlockOptionEnumerator.hasAnyOptions(game, defendingPlayerId)) {
+            recordHistory(game, "declared no blockers (nothing could legally block, no LLM call)");
+            super.selectBlockers(source, game, defendingPlayerId);
+            return;
+        }
+
         JsonObject envelope = GameStateSerializer.serializeDeclareBlockers(
                 game, this, "Declare blockers for combat.", notes, historySnapshot());
         Optional<LLMDecisionResponse> maybe = decide(game, envelope);
