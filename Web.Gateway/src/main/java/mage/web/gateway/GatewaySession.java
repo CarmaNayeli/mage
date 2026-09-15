@@ -3,7 +3,6 @@ package mage.web.gateway;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import mage.cards.decks.Deck;
 import mage.constants.ManaType;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.RangeOfInfluence;
@@ -45,7 +44,6 @@ final class GatewaySession {
 
     private static final Logger logger = Logger.getLogger(GatewaySession.class);
     private static final Pattern INVALID_USERNAME_CHARS = Pattern.compile("[^a-z0-9_]");
-    private static final String DECK_TYPE = "Constructed - Freeform Unlimited";
 
     private final String mageHost;
     private final int magePort;
@@ -82,7 +80,7 @@ final class GatewaySession {
         try {
             switch (call == null ? "" : call) {
                 case "join_practice_table":
-                    joinPracticeTable(args.get(0).getAsString(), args.get(1).getAsString());
+                    joinPracticeTable(args.get(0).getAsJsonObject());
                     break;
                 case "send_uuid":
                     requireGame();
@@ -125,15 +123,32 @@ final class GatewaySession {
         }
     }
 
-    private void joinPracticeTable(String rawPlayerName, String decklistText) {
-        String playerName = sanitizeUsername(rawPlayerName);
+    /**
+     * {@code request} shape: {@code {playerName, format, playerDeck, opponentMode,
+     * opponentDeck?, difficulty?}}. {@code opponentMode} is one of "provide" (use
+     * {@code opponentDeck}), "basic" (a bundled fixed decklist, see
+     * {@link BasicDecks}), or "counter" (Claude analyzes {@code playerDeck} and
+     * builds one at the requested {@code difficulty}, see
+     * {@link CounterDeckGenerator}).
+     */
+    private void joinPracticeTable(JsonObject request) {
+        String playerName = sanitizeUsername(getString(request, "playerName", ""));
+        Format format = Format.byId(getString(request, "format", "freeform"));
+        String playerDeckText = getString(request, "playerDeck", "");
+        String opponentMode = getString(request, "opponentMode", "basic");
+        String difficulty = getString(request, "difficulty", "medium");
 
-        DeckSubmission.Result deckResult = DeckSubmission.parseAndValidate(decklistText, DECK_TYPE);
-        if (deckResult.deck == null) {
-            sendGatewayError("Deck import failed: " + String.join("; ", deckResult.errors));
+        DeckSubmission.Result playerDeckResult = DeckSubmission.parseAndValidate(playerDeckText, format.deckType);
+        if (playerDeckResult.deck == null) {
+            sendGatewayError("Your deck: " + String.join("; ", playerDeckResult.errors));
             return;
         }
-        Deck deck = deckResult.deck;
+
+        DeckSubmission.Result opponentDeckResult = resolveOpponentDeck(request, format, playerDeckText, opponentMode, difficulty);
+        if (opponentDeckResult.deck == null) {
+            sendGatewayError("Opponent deck: " + String.join("; ", opponentDeckResult.errors));
+            return;
+        }
 
         GatewayMageClient client = new GatewayMageClient(this::onCallback);
         session = new SessionImpl(client);
@@ -153,10 +168,10 @@ final class GatewaySession {
 
         UUID roomId = session.getMainRoomId();
 
-        MatchOptions matchOptions = new MatchOptions("Practice table", "Two Player Duel", false);
+        MatchOptions matchOptions = new MatchOptions("Practice table", format.gameType, false);
         matchOptions.setAttackOption(MultiplayerAttackOption.LEFT);
         matchOptions.setRange(RangeOfInfluence.ONE);
-        matchOptions.setDeckType(DECK_TYPE);
+        matchOptions.setDeckType(format.deckType);
         matchOptions.setSkillLevel(SkillLevel.CASUAL);
         matchOptions.setMullgianType(MulliganType.GAME_DEFAULT);
         // Default quit ratio requirement is 0% (never having quit) - a practice tool
@@ -177,22 +192,57 @@ final class GatewaySession {
         UUID tableId = session.createTable(roomId, matchOptions).getTableId();
 
         boolean joinedHuman = session.joinTable(roomId, tableId, playerName, PlayerType.HUMAN, 0,
-                deck.prepareCardsOnlyDeck(), "");
+                playerDeckResult.deck.prepareCardsOnlyDeck(), "");
         if (!joinedHuman) {
             sendGatewayError("Could not join the table as a human player.");
             return;
         }
 
-        // The bot gets the same decklist for now - there's no separate bot-deck
-        // picker in the pre-game screen yet.
         boolean joinedBot = session.joinTable(roomId, tableId, "Practice Bot", PlayerType.LLM_BRIDGE, 0,
-                deck.prepareCardsOnlyDeck(), "");
+                opponentDeckResult.deck.prepareCardsOnlyDeck(), "");
         if (!joinedBot) {
             sendGatewayError("Could not seat the practice bot.");
             return;
         }
 
         session.startMatch(roomId, tableId);
+    }
+
+    private DeckSubmission.Result resolveOpponentDeck(JsonObject request, Format format, String playerDeckText,
+                                                       String opponentMode, String difficulty) {
+        switch (opponentMode) {
+            case "provide":
+                return DeckSubmission.parseAndValidate(getString(request, "opponentDeck", ""), format.deckType);
+
+            case "counter":
+                // Up to two attempts at a real Claude call producing something that
+                // actually imports/validates - LLM output isn't guaranteed well-formed,
+                // and this is going through the exact same import path a human's pasted
+                // decklist does, no special trust. Falls back to the fixed basic deck
+                // (never fails) rather than blocking the game from starting at all.
+                for (int attempt = 1; attempt <= 2; attempt++) {
+                    try {
+                        String generated = CounterDeckGenerator.generate(playerDeckText, format, difficulty);
+                        DeckSubmission.Result result = DeckSubmission.parseAndValidate(generated, format.deckType);
+                        if (result.deck != null) {
+                            return result;
+                        }
+                        logger.warn("Counter-deck attempt " + attempt + " failed validation: " + result.errors);
+                    } catch (RuntimeException e) {
+                        logger.error("Counter-deck generation attempt " + attempt + " failed", e);
+                    }
+                }
+                logger.warn("Counter-deck generation failed twice - falling back to the basic deck");
+                return DeckSubmission.parseAndValidate(BasicDecks.forFormat(format), format.deckType);
+
+            case "basic":
+            default:
+                return DeckSubmission.parseAndValidate(BasicDecks.forFormat(format), format.deckType);
+        }
+    }
+
+    private static String getString(JsonObject obj, String field, String defaultValue) {
+        return obj.has(field) && !obj.get(field).isJsonNull() ? obj.get(field).getAsString() : defaultValue;
     }
 
     private void onCallback(ClientCallback callback) {

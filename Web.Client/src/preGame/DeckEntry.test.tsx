@@ -23,13 +23,53 @@ describe("DeckEntry", () => {
     expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
   });
 
-  it("submits the trimmed name and raw decklist text", () => {
+  it("submits with the basic opponent mode and freeform format by default", () => {
     const onSubmit = vi.fn();
     render(<DeckEntry onSubmit={onSubmit} />);
     fillForm("  Carma  ", "20 Mountain\n20 Forest");
 
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
-    expect(onSubmit).toHaveBeenCalledWith("20 Mountain\n20 Forest", "Carma");
+    expect(onSubmit).toHaveBeenCalledWith({
+      playerName: "Carma",
+      format: "freeform",
+      playerDeck: "20 Mountain\n20 Forest",
+      opponentMode: "basic",
+      opponentDeck: undefined,
+      difficulty: undefined,
+    });
+  });
+
+  it("requires an opponent decklist when 'provide' is selected, and submits it", () => {
+    const onSubmit = vi.fn();
+    render(<DeckEntry onSubmit={onSubmit} />);
+    fillForm("Carma", "20 Mountain");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Provide a deck" }));
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+
+    const textareas = screen.getAllByLabelText("Decklist");
+    fireEvent.change(textareas[1], { target: { value: "10 Shock" } });
+    expect(screen.getByRole("button", { name: "Start game" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ opponentMode: "provide", opponentDeck: "10 Shock" }),
+    );
+  });
+
+  it("submits the selected format and difficulty for the counter-deck mode", () => {
+    const onSubmit = vi.fn();
+    render(<DeckEntry onSubmit={onSubmit} />);
+    fillForm("Carma", "20 Mountain");
+
+    fireEvent.change(screen.getByLabelText("Format"), { target: { value: "commander" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Analyze my deck and build a counter" }));
+    fireEvent.change(screen.getByLabelText("Difficulty"), { target: { value: "hard" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ format: "commander", opponentMode: "counter", difficulty: "hard" }),
+    );
   });
 
   it("shows a joining state and disables the form while disabled", () => {

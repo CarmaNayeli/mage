@@ -38,6 +38,17 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- Real DeckValidator classes (Standard/Modern/Commander/etc.) - without
+                 this, DeckValidatorFactory.instance stays empty in the gateway's own
+                 JVM (these are normally loaded as external plugins by Mage.Server's
+                 Main.java from config.xml, which the gateway never runs), so every
+                 createDeckValidator() call returned null and format legality was
+                 never actually being checked. -->
+            <groupId>${project.groupId}</groupId>
+            <artifactId>mage-deck-constructed</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
         </dependency>
@@ -47,6 +58,13 @@
             <groupId>org.java-websocket</groupId>
             <artifactId>Java-WebSocket</artifactId>
             <version>1.5.7</version>
+        </dependency>
+        <dependency>
+            <!-- For "analyze my deck and build a counter" - same client library the
+                 LLM bridge bot already uses (Mage.Player.AI.LLM), same version pin. -->
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>2.34.0</version>
         </dependency>
     </dependencies>
 

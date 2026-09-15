@@ -42,6 +42,8 @@ public final class GatewayServer extends WebSocketServer {
         String mageHost = args[1];
         int magePort = Integer.parseInt(args[2]);
 
+        DeckValidatorRegistration.registerAll();
+
         GatewayServer server = new GatewayServer(listenPort, mageHost, magePort);
         server.start();
     }

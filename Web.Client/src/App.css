@@ -81,12 +81,67 @@
 .deck-entry {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 640px;
+  gap: 16px;
+  max-width: 900px;
   background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    color: var(--text-h);
+  }
+}
+
+.deck-entry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.deck-entry-field-inline {
+  flex: 1 1 200px;
+
+  select {
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-h);
+  }
+}
+
+.deck-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.deck-channel {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.opponent-mode-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
 }
 
 .deck-entry-field {

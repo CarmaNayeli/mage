@@ -4,20 +4,15 @@ import logo from "./assets/xeffigy-logo.png";
 import { Board } from "./components/Board";
 import { DialogPrompt } from "./components/DialogPrompt";
 import { GameOverBanner } from "./components/GameOverBanner";
-import { DeckEntry } from "./preGame/DeckEntry";
+import { DeckEntry, type JoinRequest } from "./preGame/DeckEntry";
 import type { CardView } from "./types/gameView";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
 
-interface PendingJoin {
-  playerName: string;
-  decklistText: string;
-}
-
 function App() {
   const [connect, setConnect] = useState(false);
-  const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
+  const [pendingJoin, setPendingJoin] = useState<JoinRequest | null>(null);
   const { state, send, reset, answerDialog } = useGatewayConnection(connect ? GATEWAY_URL : null);
 
   // The socket only actually opens after useGatewayConnection's own effect runs,
@@ -25,7 +20,7 @@ function App() {
   // socket and get silently dropped - wait for "connected" instead.
   useEffect(() => {
     if (pendingJoin && state.connectionStatus === "connected") {
-      send("join_practice_table", [pendingJoin.playerName, pendingJoin.decklistText]);
+      send("join_practice_table", [pendingJoin]);
       setPendingJoin(null);
     }
   }, [pendingJoin, state.connectionStatus, send]);
@@ -41,8 +36,8 @@ function App() {
     }
   }, [connectionFailed]);
 
-  const handleDeckSubmit = (decklistText: string, playerName: string) => {
-    setPendingJoin({ playerName, decklistText });
+  const handleDeckSubmit = (request: JoinRequest) => {
+    setPendingJoin(request);
     setConnect(true);
   };
 

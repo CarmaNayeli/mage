@@ -59,7 +59,13 @@ describe("App", () => {
     expect(socket.sent).toEqual([]);
 
     act(() => socket.triggerOpen());
-    expect(socket.sent).toEqual([JSON.stringify({ call: "join_practice_table", args: ["Carma", "20 Mountain"] })]);
+    // JSON.stringify drops undefined-valued keys (opponentDeck/difficulty) entirely.
+    expect(socket.sent).toEqual([
+      JSON.stringify({
+        call: "join_practice_table",
+        args: [{ playerName: "Carma", format: "freeform", playerDeck: "20 Mountain", opponentMode: "basic" }],
+      }),
+    ]);
   });
 
   it("renders the board once a GAME_UPDATE envelope arrives", () => {
