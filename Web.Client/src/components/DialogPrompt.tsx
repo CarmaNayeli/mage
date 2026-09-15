@@ -265,23 +265,36 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
         // Confirmed against a real payload: this is NOT "pick a color and we'll tap
         // something for you" - the real Session API has exactly three ways to answer
         // (HumanPlayer.playManaHandling): click the actual permanent you want to tap
-        // (send_uuid - already how every other card-click on the board works, and
-        // Board.tsx already makes the right lands clickable here since canPlayObjects
-        // carries their basicManaAbilities the same as any other priority window),
-        // spend mana already floating in your pool (send_mana_type - only meaningful
-        // for a color you actually have pooled, which is why this used to show all six
-        // colors unconditionally and none of them did anything for most players most of
-        // the time), or cancel. There's no "just parse a color" path at all.
+        // (send_uuid), spend mana already floating in your pool (send_mana_type - only
+        // meaningful for a color you actually have pooled, which is why this used to
+        // show all six colors unconditionally and none of them did anything for most
+        // players most of the time), or cancel. There's no "just parse a color" path.
         const me = game?.players?.find((p) => p.playerId === game.myPlayerId);
         const pool = me?.manaPool;
         const spendable = MANA_TYPES.filter(([, key]) => (pool?.[key] ?? 0) > 0);
+        // The permanents actually legal to tap right now, straight from
+        // canPlayObjects - listed directly in the dialog (not just left highlighted
+        // out on the board, easy to miss among everything else there) since this is
+        // exactly the moment the player needs to find and click one of them.
+        const tappable = me
+          ? Object.keys(game?.canPlayObjects?.objects ?? {})
+              .map((id) => me.battlefield[id])
+              .filter((card): card is CardView => Boolean(card))
+          : [];
         return (
           <>
-            <div className="dialog-hint">Click the highlighted land or mana source on the board to tap it.</div>
+            <div className="dialog-hint">Click a permanent below (or on the board) to tap it for mana.</div>
+            {tappable.length > 0 && (
+              <div className="dialog-mana-sources">
+                {tappable.map((card) => (
+                  <CardTile key={card.id} card={card} onClick={() => onRespond("send_uuid", [card.id])} playable />
+                ))}
+              </div>
+            )}
             {spendable.map(([label, key]) => (
               <button
                 key={label}
-                onClick={() => game?.myPlayerId && onRespond("send_mana_type", [game.myPlayerId, label.toUpperCase()])}
+                onClick={() => game?.myPlayerId && onRespond("send_mana_type", [game.myPlayerId, key.toUpperCase()])}
               >
                 Spend {label} ({pool?.[key]})
               </button>

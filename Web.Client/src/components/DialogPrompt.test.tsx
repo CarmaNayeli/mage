@@ -180,6 +180,51 @@ describe("DialogPrompt", () => {
     expect(screen.getByText("Mulligan down to 6 cards?")).toBeInTheDocument();
   });
 
+  it("renders currently-tappable permanents as clickable card art in GAME_PLAY_MANA, responding with send_uuid", () => {
+    const onRespond = vi.fn();
+    const game = {
+      myPlayerId: "p1",
+      canPlayObjects: { objects: { "land-1": {} } },
+      players: [
+        {
+          playerId: "p1",
+          name: "Me",
+          battlefield: { "land-1": { id: "land-1", name: "Forest", cardTypes: ["LAND"] } },
+          manaPool: { white: 0, blue: 0, black: 0, red: 0, green: 0, colorless: 0 },
+        },
+      ],
+    } as unknown as GameView;
+
+    render(<DialogPrompt type="GAME_PLAY_MANA" payload={{ gameView: game }} game={game} onRespond={onRespond} />);
+
+    fireEvent.click(screen.getByTitle("Forest"));
+    expect(onRespond).toHaveBeenCalledWith("send_uuid", ["land-1"]);
+  });
+
+  it("spends pooled mana using the real ManaType key, not the display label (Generic must send COLORLESS)", () => {
+    const onRespond = vi.fn();
+    const game = {
+      myPlayerId: "p1",
+      canPlayObjects: { objects: {} },
+      players: [
+        {
+          playerId: "p1",
+          name: "Me",
+          battlefield: {},
+          manaPool: { white: 0, blue: 0, black: 0, red: 0, green: 2, colorless: 1 },
+        },
+      ],
+    } as unknown as GameView;
+
+    render(<DialogPrompt type="GAME_PLAY_MANA" payload={{ gameView: game }} game={game} onRespond={onRespond} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Spend Generic (1)" }));
+    expect(onRespond).toHaveBeenCalledWith("send_mana_type", ["p1", "COLORLESS"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Spend Green (2)" }));
+    expect(onRespond).toHaveBeenCalledWith("send_mana_type", ["p1", "GREEN"]);
+  });
+
   it("renders an unhandled-type fallback without crashing or calling onRespond", () => {
     const onRespond = vi.fn();
     render(<DialogPrompt type="SOME_FUTURE_TYPE" payload={{}} game={null} onRespond={onRespond} />);

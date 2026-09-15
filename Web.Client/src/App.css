@@ -692,6 +692,13 @@
   flex-basis: 100%;
 }
 
+.dialog-mana-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-basis: 100%;
+}
+
 /* Game over */
 
 /* Account modal */
