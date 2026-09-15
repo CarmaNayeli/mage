@@ -20,7 +20,7 @@ describe("DialogPrompt", () => {
     expect(onRespond).toHaveBeenCalledWith("send_boolean", [false]);
   });
 
-  it("renders GAME_TARGET's targets as buttons, resolving names from the game state", () => {
+  it("renders a resolvable GAME_TARGET target as real card art, clickable", () => {
     const onRespond = vi.fn();
     const game = {
       myHand: { "card-1": { id: "card-1", name: "Lightning Bolt" } },
@@ -35,14 +35,31 @@ describe("DialogPrompt", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Lightning Bolt" }));
+    // A resolvable target renders as a real CardTile (not a button) - clicking the
+    // card itself is the interaction, same as everywhere else on the board.
+    fireEvent.click(screen.getByTitle("Lightning Bolt"));
     expect(onRespond).toHaveBeenCalledWith("send_uuid", ["card-1"]);
 
-    // Unresolvable ids still render (truncated) rather than being dropped.
+    // Unresolvable ids still render (as a plain button, truncated) rather than being
+    // dropped - there's no card art to show for a target we can't find anywhere.
     expect(screen.getByRole("button", { name: "unknown-" })).toBeInTheDocument();
     // Not required (flag: false) - a Cancel option must be offered.
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onRespond).toHaveBeenCalledWith("send_boolean", [false]);
+  });
+
+  it("renders a library-search target (revealed/lookedAt) as real card art", () => {
+    const onRespond = vi.fn();
+    const game = {
+      revealed: [{ name: "Search result", cards: { "land-1": { id: "land-1", name: "Plains" } } }],
+    } as unknown as GameView;
+
+    render(
+      <DialogPrompt type="GAME_TARGET" payload={{ targets: ["land-1"], flag: true }} game={game} onRespond={onRespond} />,
+    );
+
+    fireEvent.click(screen.getByTitle("Plains"));
+    expect(onRespond).toHaveBeenCalledWith("send_uuid", ["land-1"]);
   });
 
   it("resolves player-id targets (e.g. 'Select a starting player') to player names, not raw UUIDs", () => {

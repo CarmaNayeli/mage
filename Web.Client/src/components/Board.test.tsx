@@ -51,6 +51,7 @@ const gameView: GameView = {
       isHuman: true,
       hasLeft: false,
       handCount: 1,
+      libraryCount: 53,
       graveyard: { "grave-1": card({ id: "grave-1", name: "Lava Spike" }) },
       battlefield: { "land-1": card({ id: "land-1", name: "Mountain", cardTypes: ["LAND"] }) },
       manaPool: { red: 2, blue: 0 },
@@ -62,6 +63,7 @@ const gameView: GameView = {
       isHuman: false,
       hasLeft: false,
       handCount: 4,
+      libraryCount: 55,
       graveyard: {},
       battlefield: {
         "creature-1": card({ id: "creature-1", name: "Grizzly Bears", cardTypes: ["CREATURE"], power: "2", toughness: "2" }),

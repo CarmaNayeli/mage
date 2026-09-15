@@ -82,6 +82,9 @@ export interface PlayerView {
   isHuman: boolean;
   hasLeft: boolean;
   handCount: number;
+  /** Confirmed real (real dump: "libraryCount":53) - cards remaining in the library,
+   * never the cards themselves (hidden information, same as an opponent's hand). */
+  libraryCount: number;
   graveyard: CardsView;
   battlefield: CardsView;
   /** Always fully populated (all six colors, zero-valued when empty), not sparse. */

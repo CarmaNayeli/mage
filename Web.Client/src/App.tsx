@@ -201,45 +201,47 @@ function App() {
         <div className="game-layout">
           <div className="game-main">
             <Board game={state.game} onPlayCard={handlePlayCard} playableIds={playableIds} />
-
-            {state.pendingDialog && (
-              <DialogPrompt
-                type={state.pendingDialog.type}
-                payload={state.pendingDialog.payload}
-                game={state.game}
-                onRespond={handleDialogRespond}
-              />
-            )}
           </div>
 
-          {(visibleMessages.length > 0 || tableTalk) && (
+          {(state.pendingDialog || visibleMessages.length > 0 || tableTalk) && (
             <div className="game-sidebar">
-              <div className="message-log">
-                <div className="message-log-title">Game Log</div>
-                {visibleMessages.length > 0 && (
-                  <div className="message-log-entries">
-                    {visibleMessages.slice(-30).map((msg, i) => (
-                      <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
-                        {msg.text}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {tableTalk && (
-                  <form className="chat-input" onSubmit={handleSendChat}>
-                    <input
-                      type="text"
-                      value={chatDraft}
-                      onChange={(e) => setChatDraft(e.target.value)}
-                      placeholder="Say something…"
-                      maxLength={280}
-                    />
-                    <button type="submit" disabled={!chatDraft.trim()}>
-                      Send
-                    </button>
-                  </form>
-                )}
-              </div>
+              {state.pendingDialog && (
+                <DialogPrompt
+                  type={state.pendingDialog.type}
+                  payload={state.pendingDialog.payload}
+                  game={state.game}
+                  onRespond={handleDialogRespond}
+                />
+              )}
+
+              {(visibleMessages.length > 0 || tableTalk) && (
+                <div className="message-log">
+                  <div className="message-log-title">Game Log</div>
+                  {visibleMessages.length > 0 && (
+                    <div className="message-log-entries">
+                      {visibleMessages.slice(-30).map((msg, i) => (
+                        <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
+                          {msg.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {tableTalk && (
+                    <form className="chat-input" onSubmit={handleSendChat}>
+                      <input
+                        type="text"
+                        value={chatDraft}
+                        onChange={(e) => setChatDraft(e.target.value)}
+                        placeholder="Say something…"
+                        maxLength={280}
+                      />
+                      <button type="submit" disabled={!chatDraft.trim()}>
+                        Send
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

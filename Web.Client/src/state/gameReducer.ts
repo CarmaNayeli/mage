@@ -1,5 +1,6 @@
 import type { DialogPayload, GatewayEnvelope } from "../types/envelope";
 import type { GameView } from "../types/gameView";
+import { isAutoPassablePriority } from "../utils/autoPass";
 import { extractMessageText, stripHtmlTags } from "../utils/text";
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
@@ -105,10 +106,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         // frozen on whatever GAME_INIT/GAME_UPDATE last sent, showing 0 cards/an empty
         // hand under a "mulligan?" dialog even though the server already dealt one.
         const gameView = (data as { gameView?: GameView } | null)?.gameView;
+        // A plain priority window with nothing legal but to pass isn't a real question -
+        // useGatewayConnection already answers it automatically, so it should never
+        // actually show as a dialog here either (a real question flashing on screen for
+        // one render before auto-answering would be worse than not showing it at all).
+        const autoPassed = isAutoPassablePriority(type, data as DialogPayload);
         return {
           ...state,
           game: gameView ?? state.game,
-          pendingDialog: { type, payload: data as DialogPayload },
+          pendingDialog: autoPassed ? null : { type, payload: data as DialogPayload },
         };
       }
 

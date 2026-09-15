@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useCallback } from "react";
 import { gameReducer, initialGameState, type GameState } from "../state/gameReducer";
-import type { GatewayEnvelope } from "../types/envelope";
+import type { DialogPayload, GatewayEnvelope } from "../types/envelope";
+import { isAutoPassablePriority } from "../utils/autoPass";
 
 /**
  * Connects to Web.Gateway's WebSocket endpoint (mage.web.gateway.GatewayServer).
@@ -28,6 +29,14 @@ export function useGatewayConnection(url: string | null) {
       try {
         const envelope = JSON.parse(event.data) as GatewayEnvelope;
         dispatch({ kind: "envelope", envelope });
+        // A plain priority window with nothing legal to do but pass isn't a real
+        // question - answer it immediately instead of making the player click "Next
+        // Phase / Pass Turn" by hand every time (gameReducer mirrors this same check
+        // so the dialog never actually renders in this case either - no click-then-
+        // flicker, just nothing shown at all).
+        if (isAutoPassablePriority(envelope.type, envelope.data as DialogPayload)) {
+          socket.send(JSON.stringify({ call: "send_boolean", args: [false] }));
+        }
       } catch (e) {
         // A malformed frame shouldn't take the whole connection down - log and move on.
         console.error("Failed to parse gateway message", e, event.data);

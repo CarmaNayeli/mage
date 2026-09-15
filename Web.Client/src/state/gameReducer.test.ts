@@ -41,7 +41,7 @@ describe("gameReducer", () => {
     expect(next.game).toEqual(minimalGameView);
   });
 
-  it.each(["GAME_TARGET", "GAME_CHOOSE_ABILITY", "GAME_ASK", "GAME_SELECT", "GAME_PLAY_MANA", "GAME_GET_AMOUNT"])(
+  it.each(["GAME_TARGET", "GAME_CHOOSE_ABILITY", "GAME_ASK", "GAME_PLAY_MANA", "GAME_GET_AMOUNT"])(
     "surfaces a dialog on %s",
     (type) => {
       const payload = { message: "Pick one", options: [{ index: 0, label: "Yes" }] };
@@ -49,6 +49,20 @@ describe("gameReducer", () => {
       expect(next.pendingDialog).toEqual({ type, payload });
     },
   );
+
+  // GAME_SELECT is tested separately (below) since - unlike every other dialog type -
+  // whether it surfaces at all now depends on canPlayObjects (see utils/autoPass.ts).
+  it("surfaces a GAME_SELECT dialog when something is actually playable", () => {
+    const payload = { gameView: { canPlayObjects: { objects: { "card-1": {} } } }, message: "Play spells and abilities" };
+    const next = gameReducer(initialGameState, envelope("GAME_SELECT", payload));
+    expect(next.pendingDialog).toEqual({ type: "GAME_SELECT", payload });
+  });
+
+  it("does not surface a GAME_SELECT dialog (auto-passed instead) when nothing is playable", () => {
+    const payload = { gameView: { canPlayObjects: { objects: {} } }, message: "Play spells and abilities" };
+    const next = gameReducer(initialGameState, envelope("GAME_SELECT", payload));
+    expect(next.pendingDialog).toBeNull();
+  });
 
   it("adopts a dialog's embedded gameView (e.g. GAME_ASK's mulligan prompt fires right after hands are dealt)", () => {
     const dealtHand = { turn: 1, phase: "PRECOMBAT_MAIN", players: [], myHand: { c1: { id: "c1", name: "Plains" } } } as unknown as GameView;

@@ -1,6 +1,7 @@
 import type { CardView, PlayerView } from "../types/gameView";
 import { Battlefield } from "./Battlefield";
 import { Graveyard } from "./Graveyard";
+import { Library } from "./Library";
 import { ManaPool } from "./ManaPool";
 
 interface PlayerPanelProps {
@@ -24,7 +25,10 @@ export function PlayerPanel({ player, isActivePlayer, onCardClick, playableIds, 
         <span className="player-hand-count">{player.handCount} cards</span>
       </div>
       <Battlefield cards={player.battlefield} onCardClick={onCardClick} playableIds={playableIds} onHover={onHover} />
-      <Graveyard cards={player.graveyard} onHover={onHover} />
+      <div className="side-zones">
+        <Library count={player.libraryCount} />
+        <Graveyard cards={player.graveyard} onHover={onHover} />
+      </div>
     </div>
   );
 }

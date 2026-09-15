@@ -37,15 +37,25 @@
   }
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 #root {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  /* Safety net, not a fix for anything specific found - every layout here is already
+   * flex + flex-wrap + auto/relative widths (no element sets a fixed width that could
+   * force this), but a stray overflow on some device is a much worse experience than
+   * this costing nothing when it never triggers. */
+  overflow-x: hidden;
 }
 
 h1,

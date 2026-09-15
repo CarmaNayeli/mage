@@ -69,6 +69,40 @@ describe("useGatewayConnection", () => {
     expect(MockWebSocket.instances[0].sent).toEqual([]);
   });
 
+  it("auto-answers a plain priority window with nothing playable, instead of surfacing it as a dialog", () => {
+    const { result } = renderHook(() => useGatewayConnection("ws://test"));
+    act(() => MockWebSocket.instances[0].triggerOpen());
+    act(() =>
+      MockWebSocket.instances[0].triggerMessage({
+        type: "GAME_SELECT",
+        objectId: null,
+        data: { gameView: { canPlayObjects: { objects: {} } }, message: "Play spells and abilities", options: {} },
+      }),
+    );
+
+    expect(MockWebSocket.instances[0].sent).toEqual([JSON.stringify({ call: "send_boolean", args: [false] })]);
+    expect(result.current.state.pendingDialog).toBeNull();
+  });
+
+  it("still surfaces a plain priority window as a dialog when something is actually playable", () => {
+    const { result } = renderHook(() => useGatewayConnection("ws://test"));
+    act(() => MockWebSocket.instances[0].triggerOpen());
+    act(() =>
+      MockWebSocket.instances[0].triggerMessage({
+        type: "GAME_SELECT",
+        objectId: null,
+        data: {
+          gameView: { canPlayObjects: { objects: { "card-1": {} } } },
+          message: "Play spells and abilities",
+          options: {},
+        },
+      }),
+    );
+
+    expect(MockWebSocket.instances[0].sent).toEqual([]);
+    expect(result.current.state.pendingDialog?.type).toBe("GAME_SELECT");
+  });
+
   it("closes the socket on unmount", () => {
     const { unmount } = renderHook(() => useGatewayConnection("ws://test"));
     const socket = MockWebSocket.instances[0];

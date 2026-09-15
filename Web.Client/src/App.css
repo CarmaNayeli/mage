@@ -336,6 +336,9 @@
 .game-sidebar {
   flex: 1 1 280px;
   min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* Board */
@@ -385,6 +388,7 @@
 .player-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 6px;
   font-weight: 600;
@@ -450,14 +454,46 @@
 
 .stack-cards {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
-.graveyard {
+.side-zones {
   margin-top: 6px;
+  display: flex;
+  gap: 16px;
+}
+
+.graveyard {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.library-pile {
+  width: 84px;
+  height: 117px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: repeating-linear-gradient(135deg, var(--code-bg), var(--code-bg) 6px, var(--panel-bg) 6px, var(--panel-bg) 12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.library-count {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-h);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 999px;
+  padding: 2px 12px;
 }
 
 .graveyard-cards {
@@ -634,6 +670,13 @@
   font-size: 0.75rem;
   font-style: italic;
   color: var(--text);
+}
+
+.dialog-hint {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text);
+  flex-basis: 100%;
 }
 
 /* Game over */

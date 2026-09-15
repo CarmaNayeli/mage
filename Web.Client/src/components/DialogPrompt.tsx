@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AbilityPickerPayload, DialogPayload, GameClientMessage } from "../types/envelope";
-import type { CardsView, GameView } from "../types/gameView";
+import type { CardsView, CardView, GameView } from "../types/gameView";
 import { getCombatSelection } from "../utils/combat";
 import { stripHtmlTags } from "../utils/text";
+import { CardTile } from "./CardTile";
 
 interface DialogPromptProps {
   type: string;
@@ -12,26 +13,50 @@ interface DialogPromptProps {
   onRespond: (call: "send_uuid" | "send_boolean" | "send_integer" | "send_string" | "send_mana_type", args: unknown[]) => void;
 }
 
-const MANA_TYPES = ["White", "Blue", "Black", "Red", "Green", "Generic"];
+/** Label -> the matching key in PlayerView.manaPool (confirmed against a real payload -
+ * lowercase color names, "colorless" instead of "Generic"). */
+const MANA_TYPES: Array<[string, string]> = [
+  ["White", "white"],
+  ["Blue", "blue"],
+  ["Black", "black"],
+  ["Red", "red"],
+  ["Green", "green"],
+  ["Generic", "colorless"],
+];
 
 function isAbilityPicker(type: string, _payload: DialogPayload): _payload is AbilityPickerPayload {
   return type === "GAME_CHOOSE_ABILITY";
 }
 
-/** Best-effort name lookup for GAME_TARGET/GAME_SELECT's bare UUID lists - a target
- * can be a player (e.g. "Select a starting player", "choose a player to discard")
- * just as often as a card, and only checking card zones left player-id targets
- * rendered as raw truncated UUIDs. Falls back to a truncated id if nothing matches. */
-function findCardName(game: GameView | null, id: string): string {
-  if (!game) return id.slice(0, 8);
+/** Best-effort card lookup for GAME_TARGET/GAME_SELECT's bare UUID lists.
+ * `revealed`/`lookedAt` matter here specifically for library searches (Prismatic Vista
+ * and friends): the cards a fetch effect lets you pick from are surfaced there, not in
+ * any zone this used to check - without this, every option in that dialog fell back to
+ * a meaningless truncated id (and no card art), which is exactly what made searching
+ * look broken. */
+function findCard(game: GameView | null, id: string): CardView | null {
+  if (!game) return null;
   const players = game.players ?? [];
-  const player = players.find((p) => p.playerId === id);
-  if (player) return player.name;
-  const pools: (CardsView | undefined)[] = [game.myHand, game.stack, ...players.map((p) => p.battlefield), ...players.map((p) => p.graveyard)];
+  const pools: (CardsView | undefined)[] = [
+    game.myHand,
+    game.stack,
+    ...players.map((p) => p.battlefield),
+    ...players.map((p) => p.graveyard),
+    ...(game.revealed ?? []).map((r) => r.cards),
+    ...(game.lookedAt ?? []).map((r) => r.cards),
+  ];
   for (const pool of pools) {
-    if (pool?.[id]) return pool[id].name;
+    if (pool?.[id]) return pool[id];
   }
-  return id.slice(0, 8);
+  return null;
+}
+
+/** A target can be a player (e.g. "Select a starting player", "choose a player to
+ * discard") just as often as a card - falls back to a truncated id if neither matches. */
+function findCardName(game: GameView | null, id: string): string {
+  const player = game?.players?.find((p) => p.playerId === id);
+  if (player) return player.name;
+  return findCard(game, id)?.name ?? id.slice(0, 8);
 }
 
 export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptProps) {
@@ -133,6 +158,23 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
     }
   }
 
+  /** A target is a real card (library search results included, via findCard's
+   * revealed/lookedAt lookup) as often as it's a player or something we can't resolve
+   * at all - show actual card art when we can instead of a same-looking text button
+   * for every option, which is exactly what made picking a card out of a fetch land's
+   * search results unreadable. */
+  function renderTargetOption(id: string) {
+    const card = findCard(game, id);
+    if (card) {
+      return <CardTile key={id} card={card} onClick={() => onRespond("send_uuid", [id])} playable />;
+    }
+    return (
+      <button key={id} onClick={() => onRespond("send_uuid", [id])}>
+        {findCardName(game, id)}
+      </button>
+    );
+  }
+
   function renderBody() {
     if (isAbilityPicker(type, payload)) {
       return Object.entries(payload.choices).map(([id, label]) => (
@@ -156,11 +198,7 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
       case "GAME_TARGET":
         return (
           <>
-            {(gcm.targets ?? []).map((id) => (
-              <button key={id} onClick={() => onRespond("send_uuid", [id])}>
-                {findCardName(game, id)}
-              </button>
-            ))}
+            {(gcm.targets ?? []).map((id) => renderTargetOption(id))}
             {!gcm.flag && <button onClick={() => onRespond("send_boolean", [false])}>Cancel</button>}
           </>
         );
@@ -185,11 +223,7 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
         }
         return (
           <>
-            {(gcm.targets ?? []).map((id) => (
-              <button key={id} onClick={() => onRespond("send_uuid", [id])}>
-                {findCardName(game, id)}
-              </button>
-            ))}
+            {(gcm.targets ?? []).map((id) => renderTargetOption(id))}
             {/* This is the ordinary priority window (not a target/combat pick) - the
               * only "response" here is passing priority, which advances the phase/step
               * once everyone's passed, or ends the turn once there's nothing left to
@@ -227,20 +261,35 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
         ));
       }
 
-      case "GAME_PLAY_MANA":
+      case "GAME_PLAY_MANA": {
+        // Confirmed against a real payload: this is NOT "pick a color and we'll tap
+        // something for you" - the real Session API has exactly three ways to answer
+        // (HumanPlayer.playManaHandling): click the actual permanent you want to tap
+        // (send_uuid - already how every other card-click on the board works, and
+        // Board.tsx already makes the right lands clickable here since canPlayObjects
+        // carries their basicManaAbilities the same as any other priority window),
+        // spend mana already floating in your pool (send_mana_type - only meaningful
+        // for a color you actually have pooled, which is why this used to show all six
+        // colors unconditionally and none of them did anything for most players most of
+        // the time), or cancel. There's no "just parse a color" path at all.
+        const me = game?.players?.find((p) => p.playerId === game.myPlayerId);
+        const pool = me?.manaPool;
+        const spendable = MANA_TYPES.filter(([, key]) => (pool?.[key] ?? 0) > 0);
         return (
           <>
-            {MANA_TYPES.map((manaType) => (
+            <div className="dialog-hint">Click the highlighted land or mana source on the board to tap it.</div>
+            {spendable.map(([label, key]) => (
               <button
-                key={manaType}
-                onClick={() => game?.myPlayerId && onRespond("send_mana_type", [game.myPlayerId, manaType.toUpperCase()])}
+                key={label}
+                onClick={() => game?.myPlayerId && onRespond("send_mana_type", [game.myPlayerId, label.toUpperCase()])}
               >
-                {manaType}
+                Spend {label} ({pool?.[key]})
               </button>
             ))}
             <button onClick={() => onRespond("send_boolean", [false])}>Cancel</button>
           </>
         );
+      }
 
       case "GAME_PLAY_XMANA":
         return (
