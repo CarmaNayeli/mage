@@ -16,6 +16,10 @@ interface DeckEntryProps {
   onSubmit: (request: JoinRequest) => void;
   disabled?: boolean;
   error?: string | null;
+  /** The gateway's current "here's what I'm doing" update while joining - shown
+   * instead of a static "Joining..." for the whole (sometimes tens-of-seconds-long,
+   * for AI counter-deck generation) duration. */
+  progress?: string | null;
 }
 
 const PLACEHOLDER = `Paste a decklist, one card per line, e.g.:
@@ -37,7 +41,7 @@ const FORMATS: Array<{ id: string; label: string }> = [
   { id: "commander", label: "Commander" },
 ];
 
-export function DeckEntry({ onSubmit, disabled, error }: DeckEntryProps) {
+export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProps) {
   const [playerName, setPlayerName] = useState("");
   const [format, setFormat] = useState("freeform");
   const [playerDeck, setPlayerDeck] = useState("");
@@ -176,6 +180,8 @@ export function DeckEntry({ onSubmit, disabled, error }: DeckEntryProps) {
       <button disabled={!canSubmit} onClick={handleSubmit}>
         {disabled ? "Joining..." : "Start game"}
       </button>
+
+      {disabled && progress && <div className="deck-entry-progress">{progress}</div>}
     </div>
   );
 }

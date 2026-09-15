@@ -40,7 +40,9 @@ export type ClientCallbackMethodName =
   | "USER_REQUEST_DIALOG"
   | "GAME_REDRAW_GUI"
   /** Gateway-originated, not a real ClientCallbackMethod - see GatewaySession.sendGatewayError. */
-  | "GATEWAY_ERROR";
+  | "GATEWAY_ERROR"
+  /** Gateway-originated - see GatewaySession.sendProgress. */
+  | "GATEWAY_PROGRESS";
 
 export interface GatewayEnvelope<T = unknown> {
   type: ClientCallbackMethodName | string;

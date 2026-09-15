@@ -138,6 +138,7 @@ final class GatewaySession {
         String opponentMode = getString(request, "opponentMode", "basic");
         String difficulty = getString(request, "difficulty", "medium");
 
+        sendProgress("Validating your deck…");
         DeckSubmission.Result playerDeckResult = DeckSubmission.parseAndValidate(playerDeckText, format.deckType);
         if (playerDeckResult.deck == null) {
             sendGatewayError("Your deck: " + String.join("; ", playerDeckResult.errors));
@@ -150,6 +151,7 @@ final class GatewaySession {
             return;
         }
 
+        sendProgress("Connecting to the game server…");
         GatewayMageClient client = new GatewayMageClient(this::onCallback);
         session = new SessionImpl(client);
 
@@ -166,6 +168,7 @@ final class GatewaySession {
             return;
         }
 
+        sendProgress("Creating your table…");
         UUID roomId = session.getMainRoomId();
 
         MatchOptions matchOptions = new MatchOptions("Practice table", format.gameType, false);
@@ -191,6 +194,7 @@ final class GatewaySession {
 
         UUID tableId = session.createTable(roomId, matchOptions).getTableId();
 
+        sendProgress("Seating you at the table…");
         boolean joinedHuman = session.joinTable(roomId, tableId, playerName, PlayerType.HUMAN, 0,
                 playerDeckResult.deck.prepareCardsOnlyDeck(), "");
         if (!joinedHuman) {
@@ -198,6 +202,7 @@ final class GatewaySession {
             return;
         }
 
+        sendProgress("Seating the practice bot…");
         boolean joinedBot = session.joinTable(roomId, tableId, "Practice Bot", PlayerType.LLM_BRIDGE, 0,
                 opponentDeckResult.deck.prepareCardsOnlyDeck(), "");
         if (!joinedBot) {
@@ -205,6 +210,7 @@ final class GatewaySession {
             return;
         }
 
+        sendProgress("Starting the match…");
         session.startMatch(roomId, tableId);
     }
 
@@ -212,6 +218,7 @@ final class GatewaySession {
                                                        String opponentMode, String difficulty) {
         switch (opponentMode) {
             case "provide":
+                sendProgress("Validating the opponent's deck…");
                 return DeckSubmission.parseAndValidate(getString(request, "opponentDeck", ""), format.deckType);
 
             case "counter":
@@ -221,8 +228,12 @@ final class GatewaySession {
                 // decklist does, no special trust. Falls back to the fixed basic deck
                 // (never fails) rather than blocking the game from starting at all.
                 for (int attempt = 1; attempt <= 2; attempt++) {
+                    sendProgress(attempt == 1
+                            ? "Analyzing your deck and building a " + difficulty + " counter deck…"
+                            : "First attempt didn't come out right - trying again…");
                     try {
                         String generated = CounterDeckGenerator.generate(playerDeckText, format, difficulty);
+                        sendProgress("Validating the generated deck…");
                         DeckSubmission.Result result = DeckSubmission.parseAndValidate(generated, format.deckType);
                         if (result.deck != null) {
                             return result;
@@ -233,10 +244,12 @@ final class GatewaySession {
                     }
                 }
                 logger.warn("Counter-deck generation failed twice - falling back to the basic deck");
+                sendProgress("Counter-deck generation didn't pan out - using a basic deck instead…");
                 return DeckSubmission.parseAndValidate(BasicDecks.forFormat(format), format.deckType);
 
             case "basic":
             default:
+                sendProgress("Preparing the opponent's deck…");
                 return DeckSubmission.parseAndValidate(BasicDecks.forFormat(format), format.deckType);
         }
     }
@@ -257,6 +270,20 @@ final class GatewaySession {
         logger.warn(message);
         JsonObject envelope = new JsonObject();
         envelope.addProperty("type", "GATEWAY_ERROR");
+        envelope.add("objectId", null);
+        envelope.addProperty("data", message);
+        outbound.accept(envelope.toString());
+    }
+
+    /**
+     * Granular status while {@code joinPracticeTable} works through its several
+     * genuinely slow steps (a real Claude call for "counter" mode can take tens of
+     * seconds) - without these the browser has nothing to show but a single static
+     * "Joining..." for the whole duration, which reads as hung.
+     */
+    private void sendProgress(String message) {
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("type", "GATEWAY_PROGRESS");
         envelope.add("objectId", null);
         envelope.addProperty("data", message);
         outbound.accept(envelope.toString());

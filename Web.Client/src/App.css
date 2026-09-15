@@ -173,6 +173,12 @@
   font-size: 0.9rem;
 }
 
+.deck-entry-progress {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
 /* Board */
 
 .board {

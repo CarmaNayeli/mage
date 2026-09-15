@@ -101,4 +101,24 @@ describe("gameReducer", () => {
     const reset = gameReducer(midGame, { kind: "reset" });
     expect(reset).toEqual(initialGameState);
   });
+
+  it("tracks GATEWAY_PROGRESS updates while joining", () => {
+    const first = gameReducer(initialGameState, envelope("GATEWAY_PROGRESS", "Validating your deck…"));
+    expect(first.joinProgress).toBe("Validating your deck…");
+
+    const second = gameReducer(first, envelope("GATEWAY_PROGRESS", "Connecting to the game server…"));
+    expect(second.joinProgress).toBe("Connecting to the game server…");
+  });
+
+  it("clears joinProgress once the game actually starts", () => {
+    const withProgress = gameReducer(initialGameState, envelope("GATEWAY_PROGRESS", "Creating your table…"));
+    const started = gameReducer(withProgress, envelope("GAME_INIT", minimalGameView));
+    expect(started.joinProgress).toBeNull();
+  });
+
+  it("clears joinProgress on a gateway/game error", () => {
+    const withProgress = gameReducer(initialGameState, envelope("GATEWAY_PROGRESS", "Seating you at the table…"));
+    const failed = gameReducer(withProgress, envelope("GATEWAY_ERROR", "Could not join the table."));
+    expect(failed.joinProgress).toBeNull();
+  });
 });

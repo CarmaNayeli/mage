@@ -82,6 +82,7 @@ function App() {
             onSubmit={handleDeckSubmit}
             disabled={joining}
             error={connectionFailed ? "Couldn't reach the server - check the gateway is running and try again." : state.lastError}
+            progress={joining ? state.joinProgress : null}
           />
         </>
       ) : (

@@ -12,6 +12,12 @@ export interface GameState {
   lastError: string | null;
   /** Set once GAME_OVER/END_GAME_INFO arrives - null means the match is still in progress. */
   gameOver: string | null;
+  /** The gateway's most recent "here's what I'm doing" update while joining a table -
+   * null once a game actually starts (or before any join attempt). Without this the
+   * join screen has nothing to show but a single static "Joining..." for the whole
+   * duration, which reads as hung once a step takes more than a couple seconds (the
+   * AI counter-deck generation step routinely does). */
+  joinProgress: string | null;
 }
 
 export const initialGameState: GameState = {
@@ -21,6 +27,7 @@ export const initialGameState: GameState = {
   messages: [],
   lastError: null,
   gameOver: null,
+  joinProgress: null,
 };
 
 export type GameAction =
@@ -68,11 +75,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // adopted as game state (same crash risk if it arrived after a real GameView
       // and got treated as the current board).
       if (type === "GAME_UPDATE" || type === "GAME_INIT") {
-        return { ...state, game: data as GameView };
+        return { ...state, game: data as GameView, joinProgress: null };
       }
       if (type === "GAME_UPDATE_AND_INFORM") {
         const gameView = (data as { gameView?: GameView } | null)?.gameView;
-        return gameView ? { ...state, game: gameView } : state;
+        return gameView ? { ...state, game: gameView, joinProgress: null } : state;
+      }
+
+      if (type === "GATEWAY_PROGRESS") {
+        return { ...state, joinProgress: typeof data === "string" ? data : JSON.stringify(data) };
       }
 
       if (DIALOG_TYPES.has(type)) {
@@ -85,7 +96,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (ERROR_TYPES.has(type)) {
-        return { ...state, lastError: typeof data === "string" ? data : JSON.stringify(data) };
+        return { ...state, lastError: typeof data === "string" ? data : JSON.stringify(data), joinProgress: null };
       }
 
       if (GAME_OVER_TYPES.has(type)) {
