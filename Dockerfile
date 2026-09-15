@@ -10,9 +10,11 @@ FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 COPY . .
 # Mage.Sets alone is ~33,000 source files in one javac invocation (maven-compiler-plugin
-# runs in-process, sharing Maven's own JVM heap) - the default heap starved and stalled
-# silently for over an hour on the first real attempt, with no error, just no progress.
-ENV MAVEN_OPTS="-Xmx3g -XX:+UseG1GC"
+# runs in-process, sharing Maven's own JVM heap). Default heap: stalled silently for
+# over an hour with no error. -Xmx3g: got OOM-killed ("Killed", no stack trace) ~85s
+# in on a later attempt - Fly's shared remote builders aren't a fixed, guaranteed size,
+# so leaving more headroom rather than assuming 3g fits.
+ENV MAVEN_OPTS="-Xmx2g -XX:+UseG1GC"
 # -am: also build Mage.Server's and Web.Gateway's own dependencies (Mage, Mage.Common,
 # Mage.Sets, the bundled AI/game/deck plugin modules) in the same reactor pass.
 # `install`, not `package`: the assembly step below runs as a second, separately-
