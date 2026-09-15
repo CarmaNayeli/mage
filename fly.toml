@@ -38,10 +38,18 @@ primary_region = 'iad'
     timeout = '10s'
     grace_period = '30s'
 
+# cpus=2 (was 1): Mage.Server and the gateway are two separate JVM processes sharing
+# this one machine, competing for CPU. On a single shared core, a GC pause or CPU
+# stall in either process can make Mage.Server's session to the other briefly look
+# disconnected server-side ("catch connection problems for Xs") even though the
+# browser's own WebSocket to the gateway never wavers - and any game callback that
+# needed to fire during that gap (e.g. a fetch land's "which card?" prompt) can be
+# lost. A second shared core gives both JVMs real breathing room instead of trading
+# off against each other.
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'
-  cpus = 1
+  cpus = 2
   memory_mb = 2048
 
 # Account/deck data (see mage.web.gateway.storage.AccountStore) - plain files, not a
