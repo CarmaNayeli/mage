@@ -1,4 +1,2 @@
-14 Mountain
-14 Forest
-2 Balduvian Bears
-4 Grizzly Bears
+30 Mountain
+30 Forest
