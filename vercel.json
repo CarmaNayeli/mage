@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd Web.Client && npm install && npm run build",
+  "outputDirectory": "Web.Client/dist",
+  "installCommand": "echo skip-root-install"
+}

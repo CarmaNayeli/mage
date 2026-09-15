@@ -1,0 +1,82 @@
+/*
+ * XEffigy brand palette: rough stone + antique gold + a darkened Claude orange.
+ * This is a deliberate, single committed look (matches the logo), not a
+ * light/dark-adaptive theme.
+ */
+:root {
+  --text: #b9ae9c;
+  --text-h: #d4af6a;
+  --bg: #1a1714;
+  --panel-bg: #23201b;
+  --border: #443c32;
+  --code-bg: #26221d;
+  --accent: #b5592f;
+  --accent-bg: rgba(181, 89, 47, 0.18);
+  --accent-border: rgba(181, 89, 47, 0.55);
+  --accent-hover: #c96a3d;
+  --social-bg: rgba(68, 60, 50, 0.5);
+  --shadow:
+    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Cinzel', 'Georgia', 'Times New Roman', serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 28px;
+  letter-spacing: -0.6px;
+  margin: 0;
+}
+h2 {
+  font-size: 20px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+}
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}

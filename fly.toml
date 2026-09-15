@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for xmage-llm-practice on 2026-09-15T03:18:55+03:00
+# fly.toml app configuration file for the XEffigy backend (Mage.Server + Web.Gateway).
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'xmage-llm-practice'
+app = 'xeffigy'
 primary_region = 'iad'
 
 [build]
