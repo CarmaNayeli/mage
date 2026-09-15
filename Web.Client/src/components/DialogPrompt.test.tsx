@@ -50,6 +50,44 @@ describe("DialogPrompt", () => {
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
 
+  it("renders declare-attackers GAME_SELECT as Done/All attack, not a target list", () => {
+    const onRespond = vi.fn();
+    render(
+      <DialogPrompt
+        type="GAME_SELECT"
+        payload={{ message: "Select attackers", options: { possibleAttackers: ["c1", "c2"], specialButton: "All attack" } }}
+        game={null}
+        onRespond={onRespond}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "c1" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "All attack" }));
+    expect(onRespond).toHaveBeenCalledWith("send_string", ["special"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onRespond).toHaveBeenCalledWith("send_boolean", [true]);
+  });
+
+  it("falls back to a plain priority Cancel for GAME_SELECT with no attacker/blocker options", () => {
+    const onRespond = vi.fn();
+    render(<DialogPrompt type="GAME_SELECT" payload={{ message: "Play spells and abilities", options: {} }} game={null} onRespond={onRespond} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onRespond).toHaveBeenCalledWith("send_boolean", [false]);
+  });
+
+  it("responds to Enter/Escape for GAME_ASK", () => {
+    const onRespond = vi.fn();
+    render(<DialogPrompt type="GAME_ASK" payload={{ message: "Mulligan?" }} game={null} onRespond={onRespond} />);
+
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onRespond).toHaveBeenCalledWith("send_boolean", [true]);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onRespond).toHaveBeenCalledWith("send_boolean", [false]);
+  });
+
   it("renders GAME_CHOOSE_ABILITY's choices map, responding with send_uuid", () => {
     const onRespond = vi.fn();
     render(

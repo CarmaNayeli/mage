@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { deleteDeck, listSavedDecks, saveDeck, type SavedDeck } from "../utils/savedDecks";
 
 export type OpponentMode = "provide" | "basic" | "counter";
 export type Difficulty = "easy" | "medium" | "hard";
@@ -58,6 +59,26 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
   const [opponentSideboard, setOpponentSideboard] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
 
+  const [savedDecks, setSavedDecks] = useState<SavedDeck[]>(() => listSavedDecks());
+  const [saveName, setSaveName] = useState("");
+
+  const handleLoadDeck = (deck: SavedDeck) => {
+    setFormat(deck.format);
+    setPlayerDeck(deck.playerDeck);
+    setSideboard(deck.sideboard);
+  };
+
+  const handleSaveDeck = () => {
+    const name = saveName.trim();
+    if (!name) return;
+    setSavedDecks(saveDeck({ name, format, playerDeck, sideboard }));
+    setSaveName("");
+  };
+
+  const handleDeleteDeck = (name: string) => {
+    setSavedDecks(deleteDeck(name));
+  };
+
   const isCommander = format === "commander";
   const needsOpponentDeck = opponentMode === "provide";
   const canSubmit =
@@ -106,6 +127,45 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="my-decks">
+        <h3>My Decks</h3>
+        {savedDecks.length === 0 ? (
+          <p className="deck-entry-hint">No saved decks yet - build your deck below, then save it here for next time.</p>
+        ) : (
+          <ul className="my-decks-list">
+            {savedDecks.map((deck) => (
+              <li key={deck.name}>
+                <button type="button" onClick={() => handleLoadDeck(deck)} disabled={disabled}>
+                  {deck.name} ({FORMATS.find((f) => f.id === deck.format)?.label ?? deck.format})
+                </button>
+                <button
+                  type="button"
+                  className="my-decks-delete"
+                  aria-label={`Delete ${deck.name}`}
+                  onClick={() => handleDeleteDeck(deck.name)}
+                  disabled={disabled}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="my-decks-save">
+          <input
+            type="text"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            placeholder="Name this deck to save it"
+            maxLength={40}
+            disabled={disabled}
+          />
+          <button type="button" onClick={handleSaveDeck} disabled={disabled || !saveName.trim() || !playerDeck.trim()}>
+            Save current deck
+          </button>
+        </div>
       </div>
 
       <div className="deck-channels">

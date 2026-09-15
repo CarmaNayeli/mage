@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AbilityPickerPayload, DialogPayload, GameClientMessage } from "../types/envelope";
 import type { CardsView, GameView } from "../types/gameView";
+import { getCombatSelection } from "../utils/combat";
 import { stripHtmlTags } from "../utils/text";
 
 interface DialogPromptProps {
@@ -34,13 +35,85 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
   const rawMessage = isAbilityPicker(type, payload) ? payload.message : (payload as GameClientMessage).message;
   const message = rawMessage ? stripHtmlTags(rawMessage) : rawMessage;
 
+  // Keyboard shortcuts for the common cases - Enter for whichever button is the
+  // "go ahead" action, Escape for "back out", A for the declare-attackers "All attack"
+  // special button. GAME_GET_AMOUNT/GAME_GET_MULTI_AMOUNT already submit on Enter via
+  // their native <form>, so they're left out here to avoid double-submitting.
+  useEffect(() => {
+    const gcm = payload as GameClientMessage;
+    const combatSelection = type === "GAME_SELECT" ? getCombatSelection({ type, payload }) : null;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+        return;
+      }
+      if (isAbilityPicker(type, payload)) {
+        return;
+      }
+      switch (type) {
+        case "GAME_ASK":
+          if (e.key === "Enter") onRespond("send_boolean", [true]);
+          else if (e.key === "Escape") onRespond("send_boolean", [false]);
+          break;
+        case "GAME_TARGET":
+          if (e.key === "Escape" && !gcm.flag) onRespond("send_boolean", [false]);
+          break;
+        case "GAME_SELECT":
+          if (combatSelection) {
+            if (e.key === "Enter") onRespond("send_boolean", [true]);
+            else if ((e.key === "a" || e.key === "A") && combatSelection.allAttackButton) onRespond("send_string", ["special"]);
+          } else if (e.key === "Escape" && !gcm.flag) {
+            onRespond("send_boolean", [false]);
+          }
+          break;
+        case "GAME_PLAY_MANA":
+          if (e.key === "Escape") onRespond("send_boolean", [false]);
+          break;
+        case "GAME_PLAY_XMANA":
+          if (e.key === "Enter") onRespond("send_boolean", [true]);
+          else if (e.key === "Escape") onRespond("send_boolean", [false]);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [type, payload, onRespond]);
+
   return (
     <div className="dialog-prompt">
       <div className="dialog-type">{type}</div>
       {message && <div className="dialog-message">{message}</div>}
       <div className="dialog-options">{renderBody()}</div>
+      {hotkeyHint() && <div className="dialog-hotkeys">{hotkeyHint()}</div>}
     </div>
   );
+
+  function hotkeyHint(): string | null {
+    if (isAbilityPicker(type, payload)) return null;
+    const gcm = payload as GameClientMessage;
+    switch (type) {
+      case "GAME_ASK":
+        return "Enter = Yes, Esc = No";
+      case "GAME_TARGET":
+        return !gcm.flag ? "Esc = Cancel" : null;
+      case "GAME_SELECT": {
+        const combatSelection = getCombatSelection({ type, payload });
+        if (combatSelection) {
+          return combatSelection.allAttackButton ? "Enter = Done, A = All attack" : "Enter = Done";
+        }
+        return !gcm.flag ? "Esc = Cancel" : null;
+      }
+      case "GAME_PLAY_MANA":
+        return "Esc = Cancel";
+      case "GAME_PLAY_XMANA":
+        return "Enter = Confirm, Esc = Cancel";
+      default:
+        return null;
+    }
+  }
 
   function renderBody() {
     if (isAbilityPicker(type, payload)) {
@@ -63,7 +136,6 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
         );
 
       case "GAME_TARGET":
-      case "GAME_SELECT":
         return (
           <>
             {(gcm.targets ?? []).map((id) => (
@@ -74,6 +146,36 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
             {!gcm.flag && <button onClick={() => onRespond("send_boolean", [false])}>Cancel</button>}
           </>
         );
+
+      case "GAME_SELECT": {
+        // Declaring attackers/blockers is the same GAME_SELECT as an ordinary priority
+        // window, distinguished only by an options.possibleAttackers/possibleBlockers
+        // list (see utils/combat.ts) - when present, the actual creatures to pick are
+        // clickable directly on the board (Board.tsx wires them via playableIds), so
+        // this dialog just needs a way to confirm the selection, not a duplicate list
+        // of buttons.
+        const combatSelection = getCombatSelection({ type, payload });
+        if (combatSelection) {
+          return (
+            <>
+              {combatSelection.allAttackButton && (
+                <button onClick={() => onRespond("send_string", ["special"])}>{combatSelection.allAttackButton}</button>
+              )}
+              <button onClick={() => onRespond("send_boolean", [true])}>Done</button>
+            </>
+          );
+        }
+        return (
+          <>
+            {(gcm.targets ?? []).map((id) => (
+              <button key={id} onClick={() => onRespond("send_uuid", [id])}>
+                {findCardName(game, id)}
+              </button>
+            ))}
+            {!gcm.flag && <button onClick={() => onRespond("send_boolean", [false])}>Cancel</button>}
+          </>
+        );
+      }
 
       case "GAME_CHOOSE_PILE":
         return (

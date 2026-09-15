@@ -4,8 +4,10 @@ import logo from "./assets/xeffigy-logo.png";
 import { Board } from "./components/Board";
 import { DialogPrompt } from "./components/DialogPrompt";
 import { GameOverBanner } from "./components/GameOverBanner";
+import { HamburgerMenu } from "./components/HamburgerMenu";
 import { DeckEntry, type JoinRequest } from "./preGame/DeckEntry";
 import type { CardView } from "./types/gameView";
+import { getCombatSelection } from "./utils/combat";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
@@ -60,7 +62,24 @@ function App() {
     reset();
   };
 
+  // Concede is the one action that's always meaningful regardless of screen - a
+  // dedicated "Restart" WS call would just be a concede followed by the client
+  // dropping its own connection, so there's no separate server-side "restart".
+  const handleRestart = () => {
+    if (connect) {
+      send("concede", []);
+    }
+    setConnect(false);
+    reset();
+  };
+
   const joining = connect && !state.game && !connectionFailed;
+
+  // Every card that's currently legal to click: whatever the server says is playable
+  // right now, plus (if a declare-attackers/blockers prompt is up) the human's own
+  // permanents that are legal to toggle - both answered the same way, send_uuid.
+  const combatSelection = getCombatSelection(state.pendingDialog);
+  const playableIds = new Set([...Object.keys(state.game?.canPlayObjects?.objects ?? {}), ...(combatSelection?.ids ?? [])]);
 
   return (
     <div className="app">
@@ -68,6 +87,9 @@ function App() {
         <img src={logo} alt="XEffigy" className="app-logo" />
         <span className="app-subtitle">Practice Magic: The Gathering against an LLM bot</span>
         {connect && <span className={`connection-status ${state.connectionStatus}`}>{state.connectionStatus}</span>}
+        <HamburgerMenu
+          items={[{ label: "Restart", onClick: handleRestart, disabled: !connect }]}
+        />
       </header>
 
       {!state.game ? (
@@ -86,7 +108,7 @@ function App() {
           />
         </>
       ) : (
-        <Board game={state.game} onPlayCard={handlePlayCard} />
+        <Board game={state.game} onPlayCard={handlePlayCard} playableIds={playableIds} />
       )}
 
       {state.gameOver && <GameOverBanner message={state.gameOver} onPlayAgain={handlePlayAgain} />}

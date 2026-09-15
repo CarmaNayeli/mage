@@ -1,11 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DeckEntry } from "./DeckEntry";
 
 function fillForm(name: string, decklist: string) {
   fireEvent.change(screen.getByLabelText("Your name"), { target: { value: name } });
   fireEvent.change(screen.getByLabelText("Decklist"), { target: { value: decklist } });
 }
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe("DeckEntry", () => {
   it("disables submit until both name and decklist are non-empty", () => {
@@ -150,5 +154,29 @@ describe("DeckEntry", () => {
   it("renders no error message when error is null", () => {
     render(<DeckEntry onSubmit={() => {}} error={null} />);
     expect(screen.queryByText(/couldn't reach/i)).not.toBeInTheDocument();
+  });
+
+  it("saves the current deck under a name, then loads it back later", () => {
+    const { unmount } = render(<DeckEntry onSubmit={() => {}} />);
+    fillForm("Carma", "20 Mountain\n20 Forest");
+    fireEvent.change(screen.getByPlaceholderText("Name this deck to save it"), { target: { value: "Gruul Aggro" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save current deck" }));
+    expect(screen.getByRole("button", { name: /^Gruul Aggro/ })).toBeInTheDocument();
+    unmount();
+
+    // Re-mounting simulates a later visit - the deck should still be there via localStorage.
+    render(<DeckEntry onSubmit={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Gruul Aggro/ }));
+    expect(screen.getByLabelText("Decklist")).toHaveValue("20 Mountain\n20 Forest");
+  });
+
+  it("deletes a saved deck", () => {
+    render(<DeckEntry onSubmit={() => {}} />);
+    fillForm("Carma", "20 Mountain");
+    fireEvent.change(screen.getByPlaceholderText("Name this deck to save it"), { target: { value: "Mono Red" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save current deck" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Mono Red" }));
+    expect(screen.queryByRole("button", { name: /Mono Red/ })).not.toBeInTheDocument();
   });
 });

@@ -77,7 +77,7 @@ describe("App", () => {
     act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
 
     expect(screen.queryByRole("button", { name: "Start game" })).not.toBeInTheDocument();
-    expect(screen.getByText("Turn 1 - PRECOMBAT_MAIN / MAIN")).toBeInTheDocument();
+    expect(screen.getByText(/Turn 1 - PRECOMBAT_MAIN \/ MAIN/)).toBeInTheDocument();
   });
 
   it("shows the game-over banner and returns to deck entry on Play again", () => {
@@ -93,6 +93,25 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Play again" }));
     expect(screen.getByRole("button", { name: "Start game" })).toBeInTheDocument();
     expect(socket.closed).toBe(true);
+  });
+
+  it("disables Restart before joining, and sends concede then resets when used mid-game", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("button", { name: "Restart" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" })); // close it back up
+
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "concede", args: [] }));
+    expect(socket.closed).toBe(true);
+    expect(screen.getByRole("button", { name: "Start game" })).toBeInTheDocument();
   });
 
   it("re-enables the form and lets a retry open a fresh socket after a connection failure", () => {

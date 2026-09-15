@@ -82,7 +82,7 @@ describe("Board", () => {
 
   it("renders the turn/phase header", () => {
     render(<Board game={gameView} />);
-    expect(screen.getByText("Turn 3 - PRECOMBAT_MAIN / MAIN")).toBeInTheDocument();
+    expect(screen.getByText("Turn 3 - PRECOMBAT_MAIN / MAIN - Active: Me")).toBeInTheDocument();
   });
 
   it("renders the hand, graveyard, stack, exile, and mana pool zones", () => {
@@ -95,10 +95,27 @@ describe("Board", () => {
     expect(screen.getByText("2R")).toBeInTheDocument();
   });
 
-  it("only fires onPlayCard for hand cards", () => {
+  it("only makes cards in playableIds clickable, whether in hand or on my own battlefield", () => {
+    const onPlayCard = vi.fn();
+    render(<Board game={gameView} onPlayCard={onPlayCard} playableIds={new Set(["hand-1", "land-1"])} />);
+
+    screen.getByText("Lightning Bolt").click();
+    expect(onPlayCard).toHaveBeenCalledWith(gameView.myHand["hand-1"]);
+
+    screen.getByText("Mountain").click();
+    expect(onPlayCard).toHaveBeenCalledWith(gameView.players[0].battlefield["land-1"]);
+
+    // Not in playableIds - opponent's creature - clicking it must not fire onPlayCard.
+    onPlayCard.mockClear();
+    screen.getByText("Grizzly Bears").click();
+    expect(onPlayCard).not.toHaveBeenCalled();
+  });
+
+  it("doesn't make cards clickable at all when nothing is playable", () => {
     const onPlayCard = vi.fn();
     render(<Board game={gameView} onPlayCard={onPlayCard} />);
     screen.getByText("Lightning Bolt").click();
-    expect(onPlayCard).toHaveBeenCalledWith(gameView.myHand["hand-1"]);
+    screen.getByText("Mountain").click();
+    expect(onPlayCard).not.toHaveBeenCalled();
   });
 });

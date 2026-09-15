@@ -103,6 +103,17 @@ final class GatewaySession {
                     session.sendPlayerManaType(gameId, UUID.fromString(args.get(0).getAsString()),
                             ManaType.valueOf(args.get(1).getAsString()));
                     break;
+                case "concede":
+                    // Mirrors the Swing client's CLIENT_CONCEDE_MATCH (MageFrame.java) -
+                    // our practice tables are single-game matches, so conceding the
+                    // match is the same as conceding the one game on it, and this is
+                    // the one call that works whether or not gameId has been captured
+                    // yet (e.g. the player bails from the join screen before any
+                    // GAME_INIT ever arrived).
+                    if (gameId != null && session != null) {
+                        session.quitMatch(gameId);
+                    }
+                    break;
                 default:
                     logger.warn("Unknown call from client: " + call);
             }
