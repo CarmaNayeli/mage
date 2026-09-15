@@ -45,6 +45,28 @@ describe("DialogPrompt", () => {
     expect(onRespond).toHaveBeenCalledWith("send_boolean", [false]);
   });
 
+  it("resolves player-id targets (e.g. 'Select a starting player') to player names, not raw UUIDs", () => {
+    const onRespond = vi.fn();
+    const game = {
+      players: [
+        { playerId: "p1", name: "Carma", battlefield: {}, graveyard: {} },
+        { playerId: "p2", name: "Practice Bot", battlefield: {}, graveyard: {} },
+      ],
+    } as unknown as GameView;
+
+    render(
+      <DialogPrompt
+        type="GAME_TARGET"
+        payload={{ message: "Select a starting player", targets: ["p1", "p2"], flag: true }}
+        game={game}
+        onRespond={onRespond}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Practice Bot" }));
+    expect(onRespond).toHaveBeenCalledWith("send_uuid", ["p2"]);
+  });
+
   it("omits Cancel for GAME_TARGET when the target is required", () => {
     render(<DialogPrompt type="GAME_TARGET" payload={{ targets: [], flag: true }} game={null} onRespond={noop} />);
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();

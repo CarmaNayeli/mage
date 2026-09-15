@@ -18,11 +18,15 @@ function isAbilityPicker(type: string, _payload: DialogPayload): _payload is Abi
   return type === "GAME_CHOOSE_ABILITY";
 }
 
-/** Best-effort card name lookup across every zone this client knows about, for
- * GAME_TARGET/GAME_SELECT's bare UUID lists - falls back to a truncated id. */
+/** Best-effort name lookup for GAME_TARGET/GAME_SELECT's bare UUID lists - a target
+ * can be a player (e.g. "Select a starting player", "choose a player to discard")
+ * just as often as a card, and only checking card zones left player-id targets
+ * rendered as raw truncated UUIDs. Falls back to a truncated id if nothing matches. */
 function findCardName(game: GameView | null, id: string): string {
   if (!game) return id.slice(0, 8);
   const players = game.players ?? [];
+  const player = players.find((p) => p.playerId === id);
+  if (player) return player.name;
   const pools: (CardsView | undefined)[] = [game.myHand, game.stack, ...players.map((p) => p.battlefield), ...players.map((p) => p.graveyard)];
   for (const pool of pools) {
     if (pool?.[id]) return pool[id].name;
