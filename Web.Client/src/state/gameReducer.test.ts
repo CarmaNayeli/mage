@@ -52,10 +52,22 @@ describe("gameReducer", () => {
 
   // GAME_SELECT is tested separately (below) since - unlike every other dialog type -
   // whether it surfaces at all now depends on canPlayObjects (see utils/autoPass.ts).
-  it("surfaces a GAME_SELECT dialog when something is actually playable", () => {
-    const payload = { gameView: { canPlayObjects: { objects: { "card-1": {} } } }, message: "Play spells and abilities" };
+  it("surfaces a GAME_SELECT dialog when something is actually castable/playable (not just a tap-for-mana land)", () => {
+    const payload = {
+      gameView: { canPlayObjects: { objects: { "card-1": { basicCastAbilities: [{ id: "a1", value: "Cast for 3 mana" }] } } } },
+      message: "Play spells and abilities",
+    };
     const next = gameReducer(initialGameState, envelope("GAME_SELECT", payload));
     expect(next.pendingDialog).toEqual({ type: "GAME_SELECT", payload });
+  });
+
+  it("does not surface a GAME_SELECT dialog when the only 'playable' entry is a tap-for-mana land", () => {
+    const payload = {
+      gameView: { canPlayObjects: { objects: { "land-1": { basicManaAbilities: [{ id: "a1", value: "Tap for mana" }] } } } },
+      message: "Play spells and abilities",
+    };
+    const next = gameReducer(initialGameState, envelope("GAME_SELECT", payload));
+    expect(next.pendingDialog).toBeNull();
   });
 
   it("does not surface a GAME_SELECT dialog (auto-passed instead) when nothing is playable", () => {
