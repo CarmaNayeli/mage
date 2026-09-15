@@ -78,6 +78,7 @@ final class GatewaySession {
     }
 
     void handleMessage(String rawJson) {
+        long receivedAt = System.currentTimeMillis();
         JsonObject action;
         try {
             action = JsonParser.parseString(rawJson).getAsJsonObject();
@@ -87,6 +88,9 @@ final class GatewaySession {
         }
 
         String call = action.has("call") ? action.get("call").getAsString() : null;
+        if ("register".equals(call) || "login".equals(call)) {
+            logger.info("handleMessage(" + call + ") dispatched at " + receivedAt);
+        }
         JsonArray args = action.has("args") ? action.getAsJsonArray("args") : new JsonArray();
 
         try {
@@ -134,16 +138,22 @@ final class GatewaySession {
                         session.quitMatch(gameId);
                     }
                     break;
-                case "register":
+                case "register": {
+                    long t0 = System.currentTimeMillis();
                     handleAccountResult(accountStore.register(
                             getString(args.get(0).getAsJsonObject(), "username", ""),
                             getString(args.get(0).getAsJsonObject(), "password", "")));
+                    logger.info("register handled in " + (System.currentTimeMillis() - t0) + "ms");
                     break;
-                case "login":
+                }
+                case "login": {
+                    long t0 = System.currentTimeMillis();
                     handleAccountResult(accountStore.login(
                             getString(args.get(0).getAsJsonObject(), "username", ""),
                             getString(args.get(0).getAsJsonObject(), "password", "")));
+                    logger.info("login handled in " + (System.currentTimeMillis() - t0) + "ms");
                     break;
+                }
                 case "login_with_token": {
                     // Silent on failure (an expired/invalid stored token just means
                     // "play as a guest," not an error worth interrupting anyone with) -

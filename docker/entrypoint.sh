@@ -10,10 +10,19 @@ set -e
 # server open outbound connections back to clients for callbacks too, so both
 # processes need this, not just the one initiating the connection.
 JAVA_OPENS="--add-opens java.base/java.io=ALL-UNNAMED"
+# The JDK's default SecureRandom on Linux seeds itself from /dev/random, which can
+# block for a real, noticeable amount of time (seconds) the first time anything reads
+# it in a freshly-booted container with a thin entropy pool - exactly the shape of
+# account registration/login's very first PBKDF2 salt/token generation being slow
+# once per boot while every later one is fast. /dev/urandom never blocks (and is
+# considered just as cryptographically strong once the kernel CSPRNG is seeded at
+# all, which it always is on any real Linux boot) - both processes get real crypto
+# calls (Mage.Server: session tokens/TLS-adjacent bits; the gateway: PasswordHasher).
+JAVA_EGD="-Djava.security.egd=file:/dev/./urandom"
 
 cd /app/server
 echo "=== starting Mage.Server ==="
-java $JAVA_OPENS -Xmx1024m -jar ./lib/mage-server-*.jar &
+java $JAVA_OPENS $JAVA_EGD -Xmx1024m -jar ./lib/mage-server-*.jar &
 SERVER_PID=$!
 
 # The gateway's own WebSocket port binds immediately (GatewayServer.start() doesn't
@@ -28,7 +37,7 @@ SERVER_PID=$!
 # /proc/net/tcp entirely). Fly's health check probes over IPv4 and got a flat
 # "connection refused" against an otherwise perfectly healthy process.
 echo "=== starting gateway WebSocket server on 8080 ==="
-java $JAVA_OPENS -Djava.net.preferIPv4Stack=true -jar /app/gateway/mage-web-gateway.jar 8080 127.0.0.1 17171 &
+java $JAVA_OPENS $JAVA_EGD -Djava.net.preferIPv4Stack=true -jar /app/gateway/mage-web-gateway.jar 8080 127.0.0.1 17171 &
 GATEWAY_PID=$!
 
 # Exit (letting Fly restart the machine) if EITHER top-level process dies, rather than
