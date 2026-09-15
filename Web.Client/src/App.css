@@ -313,32 +313,13 @@
   font-style: italic;
 }
 
-/* Game layout - board + dialog on one side, log/chat as a sidebar, so the log isn't
- * stacked below everything else (a full page of scrolling to see it, and it used to
- * shove the dialog down into overlapping the hand before the dialog became a normal-
- * flow element - see .dialog-prompt above). Wraps to a single column once the sidebar
- * can't fit at a reasonable width. */
+/* Game layout - a single column now (see .board-center below): the Turn Tracker/Game
+ * Log used to live in a separate sidebar next to the board, but that column ran out
+ * of content long before the board did, leaving a lot of empty vertical space beside a
+ * much taller board and wasting the width it held onto meanwhile. */
 .game-layout {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.game-main {
-  flex: 3 1 480px;
-  min-width: 0;
-  display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.game-sidebar {
-  flex: 1 1 280px;
-  min-width: 240px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 /* Board */
@@ -462,6 +443,38 @@
   margin-top: 6px;
   display: flex;
   gap: 16px;
+}
+
+/* The Turn Tracker + Game Log, in the middle of the board (see Board's centerContent
+ * prop) - side by side rather than stacked now that there's a full board's width to
+ * use instead of a narrow sidebar column, which is what actually saves the vertical
+ * space: two boxes wide beats two boxes tall. Wraps to stacked once that width isn't
+ * there (a real MTG table doesn't get a horizontal-scroll option, and neither should
+ * this). */
+.board-center {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.board-center > .dialog-prompt {
+  flex: 1 1 320px;
+}
+
+.board-center > .message-log {
+  flex: 1 1 280px;
+}
+
+.command-zone {
+  margin-bottom: 8px;
+}
+
+.command-zone-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .graveyard {

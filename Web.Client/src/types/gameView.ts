@@ -89,6 +89,13 @@ export interface PlayerView {
   battlefield: CardsView;
   /** Always fully populated (all six colors, zero-valued when empty), not sparse. */
   manaPool?: Record<string, number>;
+  /** PlayerView.commandList on the Java side (mage.game.command.* objects: Commander,
+   * Emblem, Dungeon, Plane) - only Commander entries serialize as a real CardView
+   * (CommanderView extends CardView, tagged mageObjectType: "COMMANDER"); the others
+   * have unrelated shapes, so treat this as "possibly a CardView" and always filter on
+   * mageObjectType before rendering one as a card (see CommandZone.tsx). Absent/empty
+   * outside Commander-family formats. */
+  commandList?: CardView[];
   [key: string]: unknown;
 }
 
@@ -106,6 +113,9 @@ export interface CardView {
   expansionSetCode?: string;
   cardNumber?: string;
   rules?: string[];
+  /** Real field on the Java side (CardView.mageObjectType) - "COMMANDER" is the one
+   * value this client currently cares about (see PlayerView.commandList/CommandZone). */
+  mageObjectType?: string;
   [key: string]: unknown;
 }
 
