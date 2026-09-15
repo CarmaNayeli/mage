@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CardView, GameView } from "../types/gameView";
 import { Board } from "./Board";
@@ -117,5 +117,42 @@ describe("Board", () => {
     screen.getByText("Lightning Bolt").click();
     screen.getByText("Mountain").click();
     expect(onPlayCard).not.toHaveBeenCalled();
+  });
+
+  it("zooms in on a hovered card only while Z is held, and drops it on keyup", () => {
+    render(<Board game={gameView} />);
+    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByTitle("Mountain"));
+    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument(); // not yet - Z isn't held
+
+    fireEvent.keyDown(window, { key: "z" });
+    expect(screen.getByRole("heading", { name: "Mountain" })).toBeInTheDocument();
+
+    fireEvent.keyUp(window, { key: "z" });
+    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+  });
+
+  it("drops the zoom on window blur even without a keyup (e.g. alt-tab)", () => {
+    render(<Board game={gameView} />);
+    fireEvent.mouseEnter(screen.getByTitle("Mountain"));
+    fireEvent.keyDown(window, { key: "z" });
+    expect(screen.getByRole("heading", { name: "Mountain" })).toBeInTheDocument();
+
+    fireEvent.blur(window);
+    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+  });
+
+  it("T activates the hovered card only if it's currently playable", () => {
+    const onPlayCard = vi.fn();
+    render(<Board game={gameView} onPlayCard={onPlayCard} playableIds={new Set(["land-1"])} />);
+
+    fireEvent.mouseEnter(screen.getByTitle("Lightning Bolt"));
+    fireEvent.keyDown(window, { key: "t" });
+    expect(onPlayCard).not.toHaveBeenCalled(); // hand-1 isn't in playableIds
+
+    fireEvent.mouseEnter(screen.getByTitle("Mountain"));
+    fireEvent.keyDown(window, { key: "t" });
+    expect(onPlayCard).toHaveBeenCalledWith(gameView.players[0].battlefield["land-1"]);
   });
 });

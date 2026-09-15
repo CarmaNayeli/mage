@@ -1,15 +1,26 @@
 import type { DialogPayload, GatewayEnvelope } from "../types/envelope";
 import type { GameView } from "../types/gameView";
-import { stripHtmlTags } from "../utils/text";
+import { extractMessageText, stripHtmlTags } from "../utils/text";
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
+
+/** One line in the game log. `isTalk` is true only for an actual chat message (the
+ * bot's flavor "says" lines, or the player's own replies) - real ChatMessage payloads
+ * carry `messageType: "TALK"` for these and "GAME"/"STATUS" for ordinary play-by-play
+ * (informPlayers), so this is a structural distinction, not a text-pattern guess. It's
+ * what "Table Talk: On/Off" (App.tsx) filters on - play-by-play narration always
+ * stays, only the talking is toggleable. */
+export interface LogEntry {
+  text: string;
+  isTalk: boolean;
+}
 
 export interface GameState {
   connectionStatus: ConnectionStatus;
   game: GameView | null;
   /** The most recent dialog awaiting a response, if any - null means nothing to answer right now. */
   pendingDialog: { type: string; payload: DialogPayload } | null;
-  messages: string[];
+  messages: LogEntry[];
   lastError: string | null;
   /** Set once GAME_OVER/END_GAME_INFO arrives - null means the match is still in progress. */
   gameOver: string | null;
@@ -102,16 +113,29 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (MESSAGE_TYPES.has(type)) {
-        const text = typeof data === "string" ? stripHtmlTags(data) : JSON.stringify(data);
-        return { ...state, messages: [...state.messages, text].slice(-100) };
+        const text = stripHtmlTags(extractMessageText(data));
+        const messageType = data && typeof data === "object" ? (data as { messageType?: string }).messageType : undefined;
+        const entry: LogEntry = { text, isTalk: messageType === "TALK" };
+        return { ...state, messages: [...state.messages, entry].slice(-100) };
       }
 
       if (ERROR_TYPES.has(type)) {
-        return { ...state, lastError: typeof data === "string" ? data : JSON.stringify(data), joinProgress: null };
+        const text = stripHtmlTags(extractMessageText(data));
+        // GAME_ERROR is how the server explains an illegal move (wrong phase, no
+        // legal targets, can't afford it, etc.) - it used to only ever populate
+        // lastError, which nothing showed once a game was underway (lastError only
+        // ever reached the pre-game "couldn't connect" banner). Surfacing it in the
+        // log too means "why didn't that work" actually gets answered in-game.
+        return {
+          ...state,
+          lastError: text,
+          messages: type === "GAME_ERROR" ? [...state.messages, { text: `⚠ ${text}`, isTalk: false }].slice(-100) : state.messages,
+          joinProgress: null,
+        };
       }
 
       if (GAME_OVER_TYPES.has(type)) {
-        return { ...state, gameOver: typeof data === "string" ? data : JSON.stringify(data), pendingDialog: null };
+        return { ...state, gameOver: stripHtmlTags(extractMessageText(data)), pendingDialog: null };
       }
 
       // Unhandled callback type - keep state as-is rather than guessing at its shape.

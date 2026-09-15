@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
 import logo from "./assets/xeffigy-logo.png";
 import { Board } from "./components/Board";
@@ -8,6 +8,7 @@ import { HamburgerMenu } from "./components/HamburgerMenu";
 import { DeckEntry, type JoinRequest } from "./preGame/DeckEntry";
 import type { CardView } from "./types/gameView";
 import { getCombatSelection } from "./utils/combat";
+import { loadTableTalk, saveTableTalk } from "./utils/settings";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
@@ -15,7 +16,17 @@ const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
 function App() {
   const [connect, setConnect] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<JoinRequest | null>(null);
+  const [tableTalk, setTableTalk] = useState(() => loadTableTalk());
+  const [chatDraft, setChatDraft] = useState("");
   const { state, send, reset, answerDialog } = useGatewayConnection(connect ? GATEWAY_URL : null);
+
+  const toggleTableTalk = () => {
+    setTableTalk((current) => {
+      const next = !current;
+      saveTableTalk(next);
+      return next;
+    });
+  };
 
   // The socket only actually opens after useGatewayConnection's own effect runs,
   // so a join sent synchronously from handleDeckSubmit would race an unopened
@@ -57,6 +68,14 @@ function App() {
     send("send_uuid", [card.id]);
   };
 
+  const handleSendChat = (e: FormEvent) => {
+    e.preventDefault();
+    const text = chatDraft.trim();
+    if (!text) return;
+    send("chat", [text]);
+    setChatDraft("");
+  };
+
   const handlePlayAgain = () => {
     setConnect(false);
     reset();
@@ -81,6 +100,8 @@ function App() {
   const combatSelection = getCombatSelection(state.pendingDialog);
   const playableIds = new Set([...Object.keys(state.game?.canPlayObjects?.objects ?? {}), ...(combatSelection?.ids ?? [])]);
 
+  const visibleMessages = tableTalk ? state.messages : state.messages.filter((m) => !m.isTalk);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -88,7 +109,10 @@ function App() {
         <span className="app-subtitle">Practice Magic: The Gathering against an LLM bot</span>
         {connect && <span className={`connection-status ${state.connectionStatus}`}>{state.connectionStatus}</span>}
         <HamburgerMenu
-          items={[{ label: "Restart", onClick: handleRestart, disabled: !connect }]}
+          items={[
+            { label: "Restart", onClick: handleRestart, disabled: !connect },
+            { label: tableTalk ? "Table Talk: On" : "Table Talk: Off", onClick: toggleTableTalk },
+          ]}
         />
       </header>
 
@@ -122,11 +146,32 @@ function App() {
         />
       )}
 
-      {state.messages.length > 0 && (
+      {(visibleMessages.length > 0 || (state.game && tableTalk)) && (
         <div className="message-log">
-          {state.messages.slice(-10).map((msg, i) => (
-            <div key={i}>{msg}</div>
-          ))}
+          <div className="message-log-title">Game Log</div>
+          {visibleMessages.length > 0 && (
+            <div className="message-log-entries">
+              {visibleMessages.slice(-30).map((msg, i) => (
+                <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
+                  {msg.text}
+                </div>
+              ))}
+            </div>
+          )}
+          {state.game && tableTalk && (
+            <form className="chat-input" onSubmit={handleSendChat}>
+              <input
+                type="text"
+                value={chatDraft}
+                onChange={(e) => setChatDraft(e.target.value)}
+                placeholder="Talk trash back…"
+                maxLength={280}
+              />
+              <button type="submit" disabled={!chatDraft.trim()}>
+                Send
+              </button>
+            </form>
+          )}
         </div>
       )}
     </div>

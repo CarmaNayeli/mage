@@ -58,6 +58,10 @@ final class GatewaySession {
      * objectId as the relevant game's id for GAME_* methods).
      */
     private volatile UUID gameId;
+    /** The game's chat channel, joined once {@link #gameId} is first captured (see
+     * {@link #onCallback}) - needed to let the player actually talk back, not just
+     * receive the game's own log/the bot's table talk. */
+    private volatile UUID chatId;
 
     GatewaySession(String mageHost, int magePort, Consumer<String> outbound) {
         this.mageHost = mageHost;
@@ -102,6 +106,14 @@ final class GatewaySession {
                     requireGame();
                     session.sendPlayerManaType(gameId, UUID.fromString(args.get(0).getAsString()),
                             ManaType.valueOf(args.get(1).getAsString()));
+                    break;
+                case "chat":
+                    // Only meaningful once the game's chat has actually been joined
+                    // (see onCallback) - silently drop anything sent before that, same
+                    // as every other call here requiring requireGame().
+                    if (chatId != null && session != null) {
+                        session.sendChatMessage(chatId, args.get(0).getAsString());
+                    }
                     break;
                 case "concede":
                     // Mirrors the Swing client's CLIENT_CONCEDE_MATCH (MageFrame.java) -
@@ -273,6 +285,16 @@ final class GatewaySession {
         callback.decompressData();
         if (gameId == null && callback.getObjectId() != null && callback.getMethod().name().startsWith("GAME_")) {
             gameId = callback.getObjectId();
+            // The game's own log (informPlayers - play-by-play, the LLM bot's "says"
+            // lines, timeouts, etc.) is delivered over CHATMESSAGE, but ONLY to users
+            // who've explicitly joined that chat (ChatSession.broadcast only fans out
+            // to its own users map) - without this, none of it ever reaches the
+            // browser, silently, since nothing here ever failed or errored. Keeping
+            // the chatId around also lets the player talk back (see "chat" above).
+            session.getGameChatId(gameId).ifPresent(id -> {
+                chatId = id;
+                session.joinChat(id);
+            });
         }
         outbound.accept(ClientCallbackTranslator.toJson(callback));
     }

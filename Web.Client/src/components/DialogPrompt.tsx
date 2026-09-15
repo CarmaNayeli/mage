@@ -88,12 +88,26 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
 
   return (
     <div className="dialog-prompt">
-      <div className="dialog-type">{type}</div>
+      <div className="dialog-type">{dialogTitle()}</div>
       {message && <div className="dialog-message">{message}</div>}
       <div className="dialog-options">{renderBody()}</div>
       {hotkeyHint() && <div className="dialog-hotkeys">{hotkeyHint()}</div>}
     </div>
   );
+
+  /** A friendlier header than the raw envelope-type name, at least for the one dialog
+   * that shows up constantly - the ordinary priority window (a bare GAME_SELECT with
+   * no combat selection) isn't asking you to "select" anything most of the time, it's
+   * just tracking whose turn/phase it is and whether you want to act before it moves
+   * on. */
+  function dialogTitle(): string {
+    if (type === "GAME_SELECT") {
+      const combatSelection = getCombatSelection({ type, payload });
+      if (combatSelection) return combatSelection.kind === "attackers" ? "Declare Attackers" : "Declare Blockers";
+      return "Turn Tracker";
+    }
+    return type;
+  }
 
   function hotkeyHint(): string | null {
     if (isAbilityPicker(type, payload)) return null;
@@ -108,7 +122,7 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
         if (combatSelection) {
           return combatSelection.allAttackButton ? "Enter = Done, A = All attack" : "Enter = Done";
         }
-        return !gcm.flag ? "Esc = Cancel" : null;
+        return !gcm.flag ? "Esc = Next phase / pass turn" : null;
       }
       case "GAME_PLAY_MANA":
         return "Esc = Cancel";
@@ -176,7 +190,11 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
                 {findCardName(game, id)}
               </button>
             ))}
-            {!gcm.flag && <button onClick={() => onRespond("send_boolean", [false])}>Cancel</button>}
+            {/* This is the ordinary priority window (not a target/combat pick) - the
+              * only "response" here is passing priority, which advances the phase/step
+              * once everyone's passed, or ends the turn once there's nothing left to
+              * advance to - "Cancel" never described what this button does. */}
+            {!gcm.flag && <button onClick={() => onRespond("send_boolean", [false])}>Next Phase / Pass Turn</button>}
           </>
         );
       }

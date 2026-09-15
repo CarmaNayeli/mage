@@ -83,6 +83,7 @@ describe("DialogPrompt", () => {
       />,
     );
 
+    expect(screen.getByText("Declare Attackers")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "c1" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "All attack" }));
     expect(onRespond).toHaveBeenCalledWith("send_string", ["special"]);
@@ -91,11 +92,12 @@ describe("DialogPrompt", () => {
     expect(onRespond).toHaveBeenCalledWith("send_boolean", [true]);
   });
 
-  it("falls back to a plain priority Cancel for GAME_SELECT with no attacker/blocker options", () => {
+  it("renders a plain priority window as 'Turn Tracker' with a Next Phase / Pass Turn button", () => {
     const onRespond = vi.fn();
     render(<DialogPrompt type="GAME_SELECT" payload={{ message: "Play spells and abilities", options: {} }} game={null} onRespond={onRespond} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByText("Turn Tracker")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next Phase / Pass Turn" }));
     expect(onRespond).toHaveBeenCalledWith("send_boolean", [false]);
   });
 

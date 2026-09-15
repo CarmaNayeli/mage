@@ -77,23 +77,59 @@ describe("gameReducer", () => {
       state = gameReducer(state, envelope("CHATMESSAGE", `msg ${i}`));
     }
     expect(state.messages).toHaveLength(100);
-    expect(state.messages[0]).toBe("msg 5");
-    expect(state.messages.at(-1)).toBe("msg 104");
+    expect(state.messages[0]).toEqual({ text: "msg 5", isTalk: false });
+    expect(state.messages.at(-1)).toEqual({ text: "msg 104", isTalk: false });
   });
 
-  it("stringifies non-string message payloads", () => {
+  it("stringifies message payloads with no recognizable text field", () => {
     const next = gameReducer(initialGameState, envelope("SERVER_MESSAGE", { text: "hi" }));
-    expect(next.messages).toEqual([JSON.stringify({ text: "hi" })]);
+    expect(next.messages).toEqual([{ text: JSON.stringify({ text: "hi" }), isTalk: false }]);
+  });
+
+  it("extracts .message from a real ChatMessage-shaped CHATMESSAGE payload (ordinary play-by-play, messageType GAME - not talk)", () => {
+    const next = gameReducer(
+      initialGameState,
+      envelope("CHATMESSAGE", { username: "", message: "Practice Bot casts Lightning Bolt", time: null, color: "BLACK", messageType: "GAME" }),
+    );
+    expect(next.messages).toEqual([{ text: "Practice Bot casts Lightning Bolt", isTalk: false }]);
+  });
+
+  it("marks a real messageType: TALK CHATMESSAGE payload as talk (the bot's says-lines, or the player's own chat)", () => {
+    const next = gameReducer(
+      initialGameState,
+      envelope("CHATMESSAGE", {
+        username: "",
+        message: 'Practice Bot says: "Not bad, for a human."',
+        time: null,
+        color: "BLACK",
+        messageType: "TALK",
+      }),
+    );
+    expect(next.messages).toEqual([{ text: 'Practice Bot says: "Not bad, for a human."', isTalk: true }]);
+  });
+
+  it("extracts .message from a real GameClientMessage-shaped GAME_INFORM_PERSONAL payload", () => {
+    const next = gameReducer(
+      initialGameState,
+      envelope("GAME_INFORM_PERSONAL", { gameView: minimalGameView, options: null, message: "You can't do that right now." }),
+    );
+    expect(next.messages).toEqual([{ text: "You can't do that right now.", isTalk: false }]);
   });
 
   it("strips the engine's Swing-style HTML tags out of message text", () => {
     const next = gameReducer(initialGameState, envelope("CHATMESSAGE", "Mulligan <font color=#ffff00>down to 6 cards</font>?"));
-    expect(next.messages).toEqual(["Mulligan down to 6 cards?"]);
+    expect(next.messages).toEqual([{ text: "Mulligan down to 6 cards?", isTalk: false }]);
   });
 
-  it("records the last error on GAME_ERROR without touching messages", () => {
-    const next = gameReducer(initialGameState, envelope("GAME_ERROR", "boom"));
-    expect(next.lastError).toBe("boom");
+  it("records the last error on GAME_ERROR and also surfaces it in the log, so an illegal move's reason is visible", () => {
+    const next = gameReducer(initialGameState, envelope("GAME_ERROR", "That's not a legal target."));
+    expect(next.lastError).toBe("That's not a legal target.");
+    expect(next.messages).toEqual([{ text: "⚠ That's not a legal target.", isTalk: false }]);
+  });
+
+  it("does not add GATEWAY_ERROR (a gateway/join-flow failure, not an in-game rules error) to the log", () => {
+    const next = gameReducer(initialGameState, envelope("GATEWAY_ERROR", "Could not join the table."));
+    expect(next.lastError).toBe("Could not join the table.");
     expect(next.messages).toEqual([]);
   });
 
@@ -109,7 +145,17 @@ describe("gameReducer", () => {
     expect(next.pendingDialog).toBeNull();
   });
 
-  it("stringifies a non-string game-over payload", () => {
+  it("extracts .message from a real GameClientMessage-shaped GAME_OVER payload", () => {
+    const next = gameReducer(initialGameState, envelope("GAME_OVER", { gameView: minimalGameView, options: null, message: "carma has won" }));
+    expect(next.gameOver).toBe("carma has won");
+  });
+
+  it("extracts .gameInfo from a real GameEndView-shaped END_GAME_INFO payload (it has no .message field)", () => {
+    const next = gameReducer(initialGameState, envelope("END_GAME_INFO", { gameInfo: "You won the game on turn 5.", matchInfo: "You won the match!" }));
+    expect(next.gameOver).toBe("You won the game on turn 5.");
+  });
+
+  it("stringifies a game-over payload with no recognizable text field", () => {
     const next = gameReducer(initialGameState, envelope("GAME_OVER", { winner: "Practice Bot" }));
     expect(next.gameOver).toBe(JSON.stringify({ winner: "Practice Bot" }));
   });

@@ -38,6 +38,7 @@ describe("App", () => {
 
   beforeEach(() => {
     restoreWebSocket = installMockWebSocket();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -112,6 +113,69 @@ describe("App", () => {
     expect(socket.sent).toContainEqual(JSON.stringify({ call: "concede", args: [] }));
     expect(socket.closed).toBe(true);
     expect(screen.getByRole("button", { name: "Start game" })).toBeInTheDocument();
+  });
+
+  it("shows the game log with an in-game error surfaced (not just swallowed pre-game)", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+    act(() => socket.triggerMessage({ type: "GAME_ERROR", objectId: null, data: "That's not a legal target." }));
+
+    expect(screen.getByText("Game Log")).toBeInTheDocument();
+    expect(screen.getByText("⚠ That's not a legal target.")).toBeInTheDocument();
+  });
+
+  it("hides the bot's table talk when the setting is toggled off, and remembers the choice", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+    act(() =>
+      socket.triggerMessage({
+        type: "CHATMESSAGE",
+        objectId: null,
+        data: { username: "", message: 'Practice Bot says: "Try harder."', messageType: "TALK" },
+      }),
+    );
+    act(() =>
+      socket.triggerMessage({
+        type: "CHATMESSAGE",
+        objectId: null,
+        data: { username: "", message: "Practice Bot casts Lightning Bolt", messageType: "GAME" },
+      }),
+    );
+
+    expect(screen.getByText('Practice Bot says: "Try harder."')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Table Talk: On" }));
+
+    expect(screen.queryByText('Practice Bot says: "Try harder."')).not.toBeInTheDocument();
+    expect(screen.getByText("Practice Bot casts Lightning Bolt")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("button", { name: "Table Talk: Off" })).toBeInTheDocument();
+  });
+
+  it("lets the player chat back to the bot while table talk is on, and hides the box when it's off", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+
+    fireEvent.change(screen.getByPlaceholderText("Talk trash back…"), { target: { value: "gg already?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(socket.sent).toContainEqual(JSON.stringify({ call: "chat", args: ["gg already?"] }));
+    expect(screen.getByPlaceholderText("Talk trash back…")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Table Talk: On" }));
+    expect(screen.queryByPlaceholderText("Talk trash back…")).not.toBeInTheDocument();
   });
 
   it("re-enables the form and lets a retry open a fresh socket after a connection failure", () => {
