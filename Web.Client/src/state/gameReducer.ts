@@ -1,5 +1,6 @@
 import type { DialogPayload, GatewayEnvelope } from "../types/envelope";
 import type { GameView } from "../types/gameView";
+import { stripHtmlTags } from "../utils/text";
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
 
@@ -87,11 +88,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (DIALOG_TYPES.has(type)) {
-        return { ...state, pendingDialog: { type, payload: data as DialogPayload } };
+        // Every dialog type except GAME_CHOOSE_ABILITY wraps a GameClientMessage that
+        // carries a fresh gameView alongside the question (e.g. the mulligan ask fires
+        // right after hands are dealt) - without adopting it here the board stays
+        // frozen on whatever GAME_INIT/GAME_UPDATE last sent, showing 0 cards/an empty
+        // hand under a "mulligan?" dialog even though the server already dealt one.
+        const gameView = (data as { gameView?: GameView } | null)?.gameView;
+        return {
+          ...state,
+          game: gameView ?? state.game,
+          pendingDialog: { type, payload: data as DialogPayload },
+        };
       }
 
       if (MESSAGE_TYPES.has(type)) {
-        const text = typeof data === "string" ? data : JSON.stringify(data);
+        const text = typeof data === "string" ? stripHtmlTags(data) : JSON.stringify(data);
         return { ...state, messages: [...state.messages, text].slice(-100) };
       }
 

@@ -89,6 +89,18 @@ describe("DialogPrompt", () => {
     expect(onRespond).toHaveBeenCalledWith("send_integer", [3]);
   });
 
+  it("strips the engine's Swing-style HTML tags out of the message text", () => {
+    render(
+      <DialogPrompt
+        type="GAME_ASK"
+        payload={{ message: "Mulligan <font color=#ffff00>down to 6 cards</font>?" }}
+        game={null}
+        onRespond={noop}
+      />,
+    );
+    expect(screen.getByText("Mulligan down to 6 cards?")).toBeInTheDocument();
+  });
+
   it("renders an unhandled-type fallback without crashing or calling onRespond", () => {
     const onRespond = vi.fn();
     render(<DialogPrompt type="SOME_FUTURE_TYPE" payload={{}} game={null} onRespond={onRespond} />);

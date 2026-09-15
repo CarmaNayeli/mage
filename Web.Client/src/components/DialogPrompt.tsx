@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AbilityPickerPayload, DialogPayload, GameClientMessage } from "../types/envelope";
 import type { CardsView, GameView } from "../types/gameView";
+import { stripHtmlTags } from "../utils/text";
 
 interface DialogPromptProps {
   type: string;
@@ -30,7 +31,8 @@ function findCardName(game: GameView | null, id: string): string {
 
 export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptProps) {
   const [amount, setAmount] = useState("");
-  const message = isAbilityPicker(type, payload) ? payload.message : (payload as GameClientMessage).message;
+  const rawMessage = isAbilityPicker(type, payload) ? payload.message : (payload as GameClientMessage).message;
+  const message = rawMessage ? stripHtmlTags(rawMessage) : rawMessage;
 
   return (
     <div className="dialog-prompt">

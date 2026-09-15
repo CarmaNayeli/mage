@@ -50,6 +50,19 @@ describe("gameReducer", () => {
     },
   );
 
+  it("adopts a dialog's embedded gameView (e.g. GAME_ASK's mulligan prompt fires right after hands are dealt)", () => {
+    const dealtHand = { turn: 1, phase: "PRECOMBAT_MAIN", players: [], myHand: { c1: { id: "c1", name: "Plains" } } } as unknown as GameView;
+    const next = gameReducer(initialGameState, envelope("GAME_ASK", { gameView: dealtHand, message: "Mulligan?" }));
+    expect(next.game).toEqual(dealtHand);
+    expect(next.pendingDialog?.type).toBe("GAME_ASK");
+  });
+
+  it("keeps the existing game state when a dialog has no embedded gameView (GAME_CHOOSE_ABILITY)", () => {
+    const withGame = gameReducer(initialGameState, envelope("GAME_INIT", minimalGameView));
+    const next = gameReducer(withGame, envelope("GAME_CHOOSE_ABILITY", { choices: { a1: "Cast Shock" } }));
+    expect(next.game).toEqual(minimalGameView);
+  });
+
   it("clears the pending dialog once answered", () => {
     const withDialog = gameReducer(initialGameState, envelope("GAME_ASK", { message: "?" }));
     expect(withDialog.pendingDialog).not.toBeNull();
@@ -71,6 +84,11 @@ describe("gameReducer", () => {
   it("stringifies non-string message payloads", () => {
     const next = gameReducer(initialGameState, envelope("SERVER_MESSAGE", { text: "hi" }));
     expect(next.messages).toEqual([JSON.stringify({ text: "hi" })]);
+  });
+
+  it("strips the engine's Swing-style HTML tags out of message text", () => {
+    const next = gameReducer(initialGameState, envelope("CHATMESSAGE", "Mulligan <font color=#ffff00>down to 6 cards</font>?"));
+    expect(next.messages).toEqual(["Mulligan down to 6 cards?"]);
   });
 
   it("records the last error on GAME_ERROR without touching messages", () => {
