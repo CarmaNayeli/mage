@@ -27,17 +27,20 @@ RUN mvn -B -pl Mage.Server,Web.Gateway -am -DskipTests install
 # and fails on the first one with no assembly descriptor (mage-root itself). Scoped
 # to just this module (no -am) instead, resolving its now-installed dependencies.
 RUN mvn -B -pl Mage.Server -DskipTests assembly:single
+# Unzipped here, not in the runtime stage: eclipse-temurin's *-jre images have no
+# `jar` (a JDK tool) and no `unzip` either - this stage already has a full JDK, so
+# extract now and just COPY the resulting directory into the runtime stage below.
+RUN mkdir -p /app/server \
+    && cd /app/server \
+    && jar xf /build/Mage.Server/target/mage-server.zip
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Mage.Server's own distribution.xml assembly output - config.xml, plugins/, lib/,
-# startServer.sh - unpacked as-is, same shape as a normal XMage server release.
-COPY --from=builder /build/Mage.Server/target/mage-server.zip /tmp/mage-server.zip
-RUN mkdir -p /app/server \
-    && cd /app/server \
-    && jar xf /tmp/mage-server.zip \
-    && rm /tmp/mage-server.zip
+# startServer.sh - already unpacked in the builder stage, same shape as a normal
+# XMage server release.
+COPY --from=builder /app/server /app/server
 
 COPY --from=builder /build/Web.Gateway/target/mage-web-gateway-*.jar /app/gateway/mage-web-gateway.jar
 COPY Web.Gateway/sample-decks/smoke-test.txt /app/gateway/smoke-test.txt
