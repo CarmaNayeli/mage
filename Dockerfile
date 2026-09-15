@@ -15,7 +15,11 @@ COPY . .
 ENV MAVEN_OPTS="-Xmx3g -XX:+UseG1GC"
 # -am: also build Mage.Server's and Web.Gateway's own dependencies (Mage, Mage.Common,
 # Mage.Sets, the bundled AI/game/deck plugin modules) in the same reactor pass.
-RUN mvn -B -pl Mage.Server,Web.Gateway -am -DskipTests package
+# assembly:single as a second goal, not a phase binding: Mage.Server's own
+# maven-assembly-plugin config has no <executions> - the project's own release
+# script (Utils/build-and-package.pl) runs it this same way, `mvn package
+# assembly:single`, rather than binding it to the package phase for every build.
+RUN mvn -B -pl Mage.Server,Web.Gateway -am -DskipTests package assembly:single
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
