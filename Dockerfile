@@ -26,7 +26,16 @@ RUN mvn -B -pl Mage.Server,Web.Gateway -am -DskipTests install
 # release script, Utils/build-and-package.pl, runs it) hits every OTHER module first
 # and fails on the first one with no assembly descriptor (mage-root itself). Scoped
 # to just this module (no -am) instead, resolving its now-installed dependencies.
-RUN mvn -B -pl Mage.Server -DskipTests assembly:single
+#
+# `package assembly:single` together, in ONE mvn process, not two separate RUN steps:
+# assembly:single alone in a fresh process can't see the module's own jar artifact
+# even though the file exists on disk from the earlier `install` - Maven's in-memory
+# project model only attaches it when jar:jar/package actually runs in that same
+# session. Split across two invocations, assembly silently skips it ("Cannot include
+# project artifact ... doesn't have an associated file") and the resulting zip's
+# lib/ has no mage-server-*.jar at all - exactly what broke the entrypoint script's
+# `java -jar ./lib/mage-server-*.jar` (glob matched nothing, passed through literally).
+RUN mvn -B -pl Mage.Server -DskipTests package assembly:single
 # Unzipped here, not in the runtime stage: eclipse-temurin's *-jre images have no
 # `jar` (a JDK tool) and no `unzip` either - this stage already has a full JDK, so
 # extract now and just COPY the resulting directory into the runtime stage below.
