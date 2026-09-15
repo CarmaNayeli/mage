@@ -1,5 +1,4 @@
 .git
-**/target
 .env
 *.log
 Mage.Tests/db
@@ -8,3 +7,19 @@ Mage.Tests/saved
 .idea
 *.iml
 node_modules
+
+# Maven build-output directories only - NOT **/target, which also matches the real
+# mage.target Java package (Mage/src/main/java/mage/target: Target, Targets,
+# TargetPointer, TargetAdjuster, etc.) and silently breaks the whole compile.
+Mage/target
+Mage.Common/target
+Mage.Server/target
+Mage.Sets/target
+Mage.Client/target
+Mage.Server.Console/target
+Mage.Tests/target
+Mage.Verify/target
+Mage.Reports/target
+Web.Gateway/target
+Mage.Server.Plugins/*/target
+Mage.Plugins/*/target
