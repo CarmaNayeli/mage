@@ -2,6 +2,7 @@ package mage.server;
 
 import mage.collectors.DataCollectorServices;
 import mage.game.Game;
+import mage.game.GameChatLog;
 import mage.game.Table;
 import mage.game.tournament.Tournament;
 import mage.interfaces.callback.ClientCallback;
@@ -156,6 +157,15 @@ public class ChatSession {
                         DataCollectorServices.getInstance().onChatTable(this.tableId, userName, message);
                     } else if (this.gameId != null) {
                         DataCollectorServices.getInstance().onChatGame(this.gameId, userName, message);
+                        // Real player-to-player table talk (not USER_INFO/STATUS system
+                        // messages) tied to a game - recorded so an AI seat playing that
+                        // game can react to it. Not part of GameState (deep-copied
+                        // constantly for simulation/rollback - this has no business
+                        // riding along on every one of those), just a small
+                        // side-channel keyed by the same game id.
+                        if (messageType == MessageType.TALK) {
+                            GameChatLog.record(this.gameId, userName, message);
+                        }
                     }
                     break;
                 case GAME:

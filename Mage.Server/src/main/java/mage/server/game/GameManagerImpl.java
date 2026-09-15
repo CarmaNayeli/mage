@@ -4,6 +4,7 @@ import mage.cards.decks.DeckCardLists;
 import mage.constants.ManaType;
 import mage.constants.PlayerAction;
 import mage.game.Game;
+import mage.game.GameChatLog;
 import mage.game.GameOptions;
 import mage.server.managers.GameManager;
 import mage.server.managers.ManagerFactory;
@@ -166,6 +167,7 @@ public class GameManagerImpl implements GameManager {
                 w.unlock();
             }
         }
+        GameChatLog.clear(gameId);
     }
 
     @Override

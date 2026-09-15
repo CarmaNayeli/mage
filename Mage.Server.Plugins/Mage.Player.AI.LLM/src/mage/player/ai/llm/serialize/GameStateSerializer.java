@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import mage.abilities.Ability;
 import mage.abilities.Modes;
 import mage.game.Game;
+import mage.game.GameChatLog;
 import mage.players.Player;
 import mage.target.Target;
 
@@ -157,6 +158,15 @@ public final class GameStateSerializer {
             history.forEach(historyArray::add);
         }
         envelope.add("history", historyArray);
+
+        // Real chat the human actually typed (see GameChatLog) - not part of GameState,
+        // so nothing else here already carries it. Included on every decision (not just
+        // priority) since there's no reason to assume a reply is only ever relevant to
+        // the next priority window specifically.
+        JsonArray chatArray = new JsonArray();
+        List<String> chat = GameChatLog.recent(game.getId());
+        chat.forEach(chatArray::add);
+        envelope.add("chat", chatArray);
 
         return envelope;
     }

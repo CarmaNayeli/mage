@@ -1,14 +1,18 @@
 package org.mage.test.AI.llm;
 
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import mage.constants.PhaseStep;
 import mage.constants.Zone;
+import mage.game.GameChatLog;
 import mage.player.ai.llm.serialize.GameStateSerializer;
 import org.junit.Test;
 import org.mage.test.serverside.base.CardTestCommander4Players;
 
 import java.util.Collections;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * "Second evening" full envelope check from xmage-llm-bridge-design.md: assemble the
@@ -45,6 +49,38 @@ public class GameStateSerializerSmokeTest extends CardTestCommander4Players {
                     game, player, "You have priority.", "", Collections.emptyList());
             System.out.println("=== full envelope (PlayerA) ===");
             System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(envelope));
+        });
+
+        setStrictChooseMode(true);
+        setStopAt(1, PhaseStep.POSTCOMBAT_MAIN);
+        execute();
+    }
+
+    /**
+     * Confirms the envelope's {@code chat} field actually carries what
+     * {@link GameChatLog} has recorded for this game - the wiring an AI seat relies on
+     * to see (and possibly react to) real table talk a human player typed. The chat
+     * layer itself (ChatSession/ChatManagerImpl, in Mage.Server) is what actually calls
+     * {@link GameChatLog#record}; this test calls it directly to isolate the
+     * serialization side from that server-side plumbing.
+     */
+    @Test
+    public void envelopeCarriesRecordedChat() {
+        addCard(Zone.BATTLEFIELD, playerA, "Mountain", 1);
+
+        runCode("record chat then check the envelope carries it", 1, PhaseStep.POSTCOMBAT_MAIN, playerA, (info, player, game) -> {
+            GameChatLog.record(game.getId(), "carma", "gg already?");
+            GameChatLog.record(game.getId(), "carma", "you're going down");
+
+            JsonObject envelope = GameStateSerializer.serializePriority(
+                    game, player, "You have priority.", "", Collections.emptyList());
+            JsonArray chat = envelope.getAsJsonArray("chat");
+
+            assertEquals(2, chat.size());
+            assertEquals("carma: gg already?", chat.get(0).getAsString());
+            assertEquals("carma: you're going down", chat.get(1).getAsString());
+
+            GameChatLog.clear(game.getId());
         });
 
         setStrictChooseMode(true);

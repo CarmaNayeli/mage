@@ -65,8 +65,13 @@ public final class LLMDecisionClient {
             "Passing priority is usually correct. Don't take an action just because one is available - most",
             "priority windows in a real game are passed.",
             "",
+            "`chat` is what the human player has actually typed to you recently, oldest first - real table talk,",
+            "not a game log. It may be empty. You're not obligated to respond to it or let it change a play, but",
+            "you can acknowledge it, needle back, or let it inform a bluff/threat read the way a real opponent",
+            "would notice being talked to.",
+            "",
             "`say` is optional table talk for a spectator view. Use it when it's fun or strategically relevant",
-            "(a threat, a deal, a taunt); leave it empty otherwise.");
+            "(a threat, a deal, a taunt, or a reply to `chat`); leave it empty otherwise.");
 
     private final AnthropicClient client;
     private final String primaryModel;
