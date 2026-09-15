@@ -259,13 +259,16 @@ describe("App", () => {
     // that hovering a card *inside the dialog* (not the board) triggers the zoom.
     const dialogCard = within(document.querySelector(".dialog-prompt") as HTMLElement).getByTitle("Mountain");
 
-    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+    // .card-zoom-backdrop only exists at all while something's actually zoomed -
+    // checking for it (rather than the card's name/image, which also appears
+    // elsewhere on the page) is what actually confirms the overlay itself opened.
+    expect(document.querySelector(".card-zoom-backdrop")).not.toBeInTheDocument();
     fireEvent.mouseEnter(dialogCard);
     fireEvent.keyDown(window, { key: "z" });
-    expect(screen.getByRole("heading", { name: "Mountain" })).toBeInTheDocument();
+    expect(document.querySelector(".card-zoom-backdrop")).toBeInTheDocument();
 
     fireEvent.keyUp(window, { key: "z" });
-    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+    expect(document.querySelector(".card-zoom-backdrop")).not.toBeInTheDocument();
   });
 
   it("hides the bot's table talk when the setting is toggled off, and remembers the choice", () => {
