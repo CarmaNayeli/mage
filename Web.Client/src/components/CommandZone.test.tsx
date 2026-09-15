@@ -24,6 +24,11 @@ describe("CommandZone", () => {
     expect(screen.queryByTitle("Emblem")).not.toBeInTheDocument();
   });
 
+  it("includes the player's name in the label when given (needed once shown alongside every other player's own Commander zone in a shared sidebar)", () => {
+    render(<CommandZone commandList={[commander]} playerName="Carma" />);
+    expect(screen.getByText("Commander - Carma")).toBeInTheDocument();
+  });
+
   it("is clickable when playable, and not otherwise", () => {
     const onCardClick = vi.fn();
     const { rerender } = render(<CommandZone commandList={[commander]} onCardClick={onCardClick} playableIds={new Set()} />);

@@ -1,6 +1,5 @@
 import type { CardView, PlayerView } from "../types/gameView";
 import { Battlefield } from "./Battlefield";
-import { CommandZone } from "./CommandZone";
 import { Graveyard } from "./Graveyard";
 import { Library } from "./Library";
 import { ManaPool } from "./ManaPool";
@@ -25,7 +24,6 @@ export function PlayerPanel({ player, isActivePlayer, onCardClick, playableIds, 
         {player.manaPool && <ManaPool pool={player.manaPool} />}
         <span className="player-hand-count">{player.handCount} cards</span>
       </div>
-      <CommandZone commandList={player.commandList} onCardClick={onCardClick} playableIds={playableIds} onHover={onHover} />
       <Battlefield cards={player.battlefield} onCardClick={onCardClick} playableIds={playableIds} onHover={onHover} />
       <div className="side-zones">
         <Library count={player.libraryCount} />

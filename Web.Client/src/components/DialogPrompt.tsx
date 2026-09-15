@@ -11,6 +11,11 @@ interface DialogPromptProps {
   game: GameView | null;
   /** Mirrors the real Session API: exactly one of these five per response. */
   onRespond: (call: "send_uuid" | "send_boolean" | "send_integer" | "send_string" | "send_mana_type", args: unknown[]) => void;
+  /** Reports hover in/out on any real card rendered here (a GAME_TARGET/GAME_SELECT
+   * target, a GAME_PLAY_MANA tappable land) up to App's shared "hold Z to zoom"
+   * overlay - without this, zoom only ever worked over Board's own cards, since
+   * DialogPrompt is a sibling of Board, not a child, and had no way to reach it. */
+  onHover?: (card: CardView | null) => void;
 }
 
 /** Label -> the matching key in PlayerView.manaPool (confirmed against a real payload -
@@ -59,7 +64,7 @@ function findCardName(game: GameView | null, id: string): string {
   return findCard(game, id)?.name ?? id.slice(0, 8);
 }
 
-export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptProps) {
+export function DialogPrompt({ type, payload, game, onRespond, onHover }: DialogPromptProps) {
   const [amount, setAmount] = useState("");
   const rawMessage = isAbilityPicker(type, payload) ? payload.message : (payload as GameClientMessage).message;
   const message = rawMessage ? stripHtmlTags(rawMessage) : rawMessage;
@@ -166,7 +171,7 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
   function renderTargetOption(id: string) {
     const card = findCard(game, id);
     if (card) {
-      return <CardTile key={id} card={card} onClick={() => onRespond("send_uuid", [id])} playable />;
+      return <CardTile key={id} card={card} onClick={() => onRespond("send_uuid", [id])} playable onHover={onHover} />;
     }
     return (
       <button key={id} onClick={() => onRespond("send_uuid", [id])}>
@@ -287,7 +292,7 @@ export function DialogPrompt({ type, payload, game, onRespond }: DialogPromptPro
             {tappable.length > 0 && (
               <div className="dialog-mana-sources">
                 {tappable.map((card) => (
-                  <CardTile key={card.id} card={card} onClick={() => onRespond("send_uuid", [card.id])} playable />
+                  <CardTile key={card.id} card={card} onClick={() => onRespond("send_uuid", [card.id])} playable onHover={onHover} />
                 ))}
               </div>
             )}

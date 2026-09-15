@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { installMockWebSocket, MockWebSocket } from "./test/mockWebSocket";
@@ -198,6 +198,74 @@ describe("App", () => {
 
     expect(screen.getByText("Game Log")).toBeInTheDocument();
     expect(screen.getByText("⚠ That's not a legal target.")).toBeInTheDocument();
+  });
+
+  it("shows Exile and each player's Commander in the sidebar, not the main board column", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+
+    const withCommanders: GameView = {
+      ...minimalGameView,
+      players: [
+        { ...minimalGameView.players[0], commandList: [{ id: "cmdr-1", name: "Krenko, Mob Boss", mageObjectType: "COMMANDER" }] },
+        {
+          playerId: "p2",
+          name: "Practice Bot",
+          life: 20,
+          isHuman: false,
+          hasLeft: false,
+          handCount: 0,
+          graveyard: {},
+          battlefield: {},
+          commandList: [{ id: "cmdr-2", name: "Prosper, Tome-Bound", mageObjectType: "COMMANDER" }],
+        },
+      ],
+    } as unknown as GameView;
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: withCommanders }));
+
+    const sidebar = document.querySelector(".game-sidebar") as HTMLElement;
+    expect(within(sidebar).getByText("Exile (0)")).toBeInTheDocument();
+    expect(within(sidebar).getByText("Commander - Me")).toBeInTheDocument();
+    expect(within(sidebar).getByTitle("Krenko, Mob Boss")).toBeInTheDocument();
+    expect(within(sidebar).getByText("Commander - Practice Bot")).toBeInTheDocument();
+    expect(within(sidebar).getByTitle("Prosper, Tome-Bound")).toBeInTheDocument();
+  });
+
+  it("zooms in on a card hovered inside a dialog (e.g. GAME_TARGET), not just the board itself", () => {
+    render(<App />);
+    startGame("Carma", "20 Mountain");
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.triggerOpen());
+    act(() => socket.triggerMessage({ type: "GAME_UPDATE", objectId: null, data: minimalGameView }));
+
+    const withTargetableLand: GameView = {
+      ...minimalGameView,
+      players: [
+        { ...minimalGameView.players[0], battlefield: { "land-1": { id: "land-1", name: "Mountain", cardTypes: ["LAND"] } } },
+      ],
+    };
+    act(() =>
+      socket.triggerMessage({
+        type: "GAME_TARGET",
+        objectId: null,
+        data: { targets: ["land-1"], flag: true, gameView: withTargetableLand },
+      }),
+    );
+
+    // The same land is also on the board itself (a real GAME_TARGET carries a fresh
+    // gameView) - scope to the dialog's own copy specifically, since the point here is
+    // that hovering a card *inside the dialog* (not the board) triggers the zoom.
+    const dialogCard = within(document.querySelector(".dialog-prompt") as HTMLElement).getByTitle("Mountain");
+
+    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+    fireEvent.mouseEnter(dialogCard);
+    fireEvent.keyDown(window, { key: "z" });
+    expect(screen.getByRole("heading", { name: "Mountain" })).toBeInTheDocument();
+
+    fireEvent.keyUp(window, { key: "z" });
+    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
   });
 
   it("hides the bot's table talk when the setting is toggled off, and remembers the choice", () => {

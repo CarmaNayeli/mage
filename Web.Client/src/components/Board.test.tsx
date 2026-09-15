@@ -87,13 +87,12 @@ describe("Board", () => {
     expect(screen.getByText("Turn 3 - PRECOMBAT_MAIN / MAIN - Active: Me")).toBeInTheDocument();
   });
 
-  it("renders the hand, graveyard, stack, exile, and mana pool zones", () => {
+  it("renders the hand, graveyard, stack, and mana pool zones (Exile lives in App's sidebar now, not here)", () => {
     render(<Board game={gameView} />);
     expect(screen.getByText("Lightning Bolt")).toBeInTheDocument();
     expect(screen.getByText("Lava Spike")).toBeInTheDocument();
     expect(screen.getByText("Graveyard (1)")).toBeInTheDocument();
     expect(screen.getByText("Counterspell")).toBeInTheDocument();
-    expect(screen.getByText("Swords to Plowshares")).toBeInTheDocument();
     expect(screen.getByText("2R")).toBeInTheDocument();
   });
 
@@ -121,28 +120,15 @@ describe("Board", () => {
     expect(onPlayCard).not.toHaveBeenCalled();
   });
 
-  it("zooms in on a hovered card only while Z is held, and drops it on keyup", () => {
-    render(<Board game={gameView} />);
-    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+  it("reports hover in/out up via onHover (the shared zoom overlay lives at the App level, not here)", () => {
+    const onHover = vi.fn();
+    render(<Board game={gameView} onHover={onHover} />);
 
     fireEvent.mouseEnter(screen.getByTitle("Mountain"));
-    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument(); // not yet - Z isn't held
+    expect(onHover).toHaveBeenCalledWith(gameView.players[0].battlefield["land-1"]);
 
-    fireEvent.keyDown(window, { key: "z" });
-    expect(screen.getByRole("heading", { name: "Mountain" })).toBeInTheDocument();
-
-    fireEvent.keyUp(window, { key: "z" });
-    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
-  });
-
-  it("drops the zoom on window blur even without a keyup (e.g. alt-tab)", () => {
-    render(<Board game={gameView} />);
-    fireEvent.mouseEnter(screen.getByTitle("Mountain"));
-    fireEvent.keyDown(window, { key: "z" });
-    expect(screen.getByRole("heading", { name: "Mountain" })).toBeInTheDocument();
-
-    fireEvent.blur(window);
-    expect(screen.queryByRole("heading", { name: "Mountain" })).not.toBeInTheDocument();
+    fireEvent.mouseLeave(screen.getByTitle("Mountain"));
+    expect(onHover).toHaveBeenCalledWith(null);
   });
 
   it("T activates the hovered card only if it's currently playable", () => {
@@ -158,23 +144,4 @@ describe("Board", () => {
     expect(onPlayCard).toHaveBeenCalledWith(gameView.players[0].battlefield["land-1"]);
   });
 
-  it("shows a player's commander in a dedicated Commander zone, ignoring non-Commander command-zone entries", () => {
-    const withCommander: GameView = {
-      ...gameView,
-      players: [
-        {
-          ...gameView.players[0],
-          commandList: [
-            card({ id: "cmdr-1", name: "Krenko, Mob Boss", mageObjectType: "COMMANDER" }),
-            { id: "emblem-1", name: "Emblem" } as CardView,
-          ],
-        },
-        gameView.players[1],
-      ],
-    };
-    render(<Board game={withCommander} />);
-    expect(screen.getByText("Commander")).toBeInTheDocument();
-    expect(screen.getByTitle("Krenko, Mob Boss")).toBeInTheDocument();
-    expect(screen.queryByTitle("Emblem")).not.toBeInTheDocument();
-  });
 });

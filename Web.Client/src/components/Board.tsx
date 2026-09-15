@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import type { CardView, GameView } from "../types/gameView";
-import { CardZoom } from "./CardZoom";
-import { Exile } from "./Exile";
 import { Hand } from "./Hand";
 import { PlayerPanel } from "./PlayerPanel";
 import { Stack } from "./Stack";
@@ -18,9 +16,13 @@ interface BoardProps {
    * cards have no way to be clicked at all (only hand cards did, until combat -
    * declaring attackers/blockers - needed to click permanents too). */
   playableIds?: Set<string>;
+  /** Reports hover changes up to App, which owns the shared "hold Z to zoom" overlay
+   * (see utils/useCardZoom.ts) - lifted out of Board so it also works over cards
+   * rendered elsewhere (a DialogPrompt's target list), not just the board itself. */
+  onHover?: (card: CardView | null) => void;
 }
 
-export function Board({ game, onPlayCard, playableIds }: BoardProps) {
+export function Board({ game, onPlayCard, playableIds, onHover }: BoardProps) {
   // Defensive: every payload shape assumed here has already been wrong once for real
   // (GAME_UPDATE_AND_INFORM's wrapper crashed this exact line in production) - a
   // missing/malformed field should degrade gracefully, not take the whole app down.
@@ -28,18 +30,17 @@ export function Board({ game, onPlayCard, playableIds }: BoardProps) {
   const me = players.find((p) => p.playerId === game.myPlayerId);
   const opponents = players.filter((p) => p.playerId !== game.myPlayerId);
 
-  const [hoveredCard, setHoveredCard] = useState<CardView | null>(null);
-  const [zoomKeyHeld, setZoomKeyHeld] = useState(false);
-  // Zoom tracks the held key, not a toggle - it's only up while Z is actually held
-  // down (and follows whatever card the mouse is over meanwhile), and disappears the
-  // instant it's released.
-  const zoomedCard = zoomKeyHeld ? hoveredCard : null;
+  // Tracked locally too (not just reported up via onHover) because the T hotkey below
+  // needs to read the current value back.
+  const [hoveredCard, setHoveredCardState] = useState<CardView | null>(null);
+  const setHoveredCard = (card: CardView | null) => {
+    setHoveredCardState(card);
+    onHover?.(card);
+  };
 
-  // Keyboard shortcuts: hold Z to zoom in on whatever card the mouse is over (there's
-  // no other way to read a card's rules text off the small board tiles), T "taps"/
-  // activates it - only meaningful (and only wired to actually do anything) when the
-  // hovered card is one canPlayObjects/a combat selection already says is legal to
-  // click, same as clicking it directly.
+  // T "taps"/activates the hovered card - only meaningful (and only wired to actually
+  // do anything) when it's one canPlayObjects/a combat selection already says is legal
+  // to click, same as clicking it directly. (Z-to-zoom itself lives at the App level now.)
   useEffect(() => {
     const isTypingTarget = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -47,30 +48,14 @@ export function Board({ game, onPlayCard, playableIds }: BoardProps) {
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
-      if (e.key === "z" || e.key === "Z") {
-        setZoomKeyHeld(true);
-      } else if ((e.key === "t" || e.key === "T") && hoveredCard) {
+      if ((e.key === "t" || e.key === "T") && hoveredCard) {
         if (playableIds?.has(hoveredCard.id)) {
           onPlayCard?.(hoveredCard);
         }
       }
     };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "z" || e.key === "Z") {
-        setZoomKeyHeld(false);
-      }
-    };
-    // If focus/the window itself is lost while Z is held (alt-tab, etc.), the keyup
-    // never fires - drop the zoom rather than leave it stuck open.
-    const onBlur = () => setZoomKeyHeld(false);
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", onBlur);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", onBlur);
-    };
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [hoveredCard, playableIds, onPlayCard]);
 
   return (
@@ -95,7 +80,6 @@ export function Board({ game, onPlayCard, playableIds }: BoardProps) {
       </div>
 
       <Stack cards={game.stack} onHover={setHoveredCard} />
-      <Exile exiles={game.exiles} onHover={setHoveredCard} />
 
       {me && (
         <div className="me">
@@ -110,8 +94,6 @@ export function Board({ game, onPlayCard, playableIds }: BoardProps) {
           <Hand cards={game.myHand} onCardClick={onPlayCard} playableIds={playableIds} onHover={setHoveredCard} />
         </div>
       )}
-
-      {zoomedCard && <CardZoom card={zoomedCard} />}
     </div>
   );
 }

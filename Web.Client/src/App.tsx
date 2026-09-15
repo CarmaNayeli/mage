@@ -3,7 +3,10 @@ import "./App.css";
 import logo from "./assets/xeffigy-logo.png";
 import { AccountModal } from "./components/AccountModal";
 import { Board } from "./components/Board";
+import { CardZoom } from "./components/CardZoom";
+import { CommandZone } from "./components/CommandZone";
 import { DialogPrompt } from "./components/DialogPrompt";
+import { Exile } from "./components/Exile";
 import { GameOverBanner } from "./components/GameOverBanner";
 import { HamburgerMenu } from "./components/HamburgerMenu";
 import { DeckEntry, type DeckEntryHandle, type JoinRequest, withSideboard, splitSideboard } from "./preGame/DeckEntry";
@@ -12,6 +15,7 @@ import { clearAccountToken, loadAccountToken, saveAccountToken } from "./utils/a
 import { getCombatSelection } from "./utils/combat";
 import { listSavedDecks, saveDeck, type SavedDeck } from "./utils/savedDecks";
 import { loadTableTalk, saveTableTalk } from "./utils/settings";
+import { useCardZoom } from "./utils/useCardZoom";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
@@ -27,6 +31,9 @@ function App() {
   // this tracks whether the player has actually asked to join a table, so the
   // pre-game form doesn't show a "Joining..." spinner from the moment the page loads.
   const [awaitingJoin, setAwaitingJoin] = useState(false);
+  // Shared between Board and DialogPrompt (siblings, not parent/child) so "hold Z to
+  // zoom" works over a dialog's target cards too, not just the board itself.
+  const { setHoveredCard, zoomedCard } = useCardZoom();
   const [guestTableTalk, setGuestTableTalk] = useState(() => loadTableTalk());
   const [chatDraft, setChatDraft] = useState("");
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -229,6 +236,11 @@ function App() {
 
   const visibleMessages = tableTalk ? state.messages : state.messages.filter((m) => !m.isTalk);
 
+  // A plain local const (unlike `state.game`) keeps its narrowed non-null type inside
+  // the .map() callback below - TS doesn't carry a property-access narrow like
+  // `state.game` across a closure boundary, even though it can't actually change there.
+  const game = state.game;
+
   return (
     <div className="app">
       <header className="app-header">
@@ -275,7 +287,7 @@ function App() {
         />
       </header>
 
-      {!state.game ? (
+      {!game ? (
         <>
           <p className="app-intro">
             XEffigy is a free place to practice Magic: The Gathering against an AI opponent. It's built on{" "}
@@ -300,54 +312,70 @@ function App() {
       ) : (
         <div className="game-layout">
           <div className="game-main">
-            <Board game={state.game} onPlayCard={handlePlayCard} playableIds={playableIds} />
+            <Board game={game} onPlayCard={handlePlayCard} playableIds={playableIds} onHover={setHoveredCard} />
           </div>
 
-          {(state.pendingDialog || visibleMessages.length > 0 || tableTalk) && (
-            <div className="game-sidebar">
-              {state.pendingDialog && (
-                <DialogPrompt
-                  type={state.pendingDialog.type}
-                  payload={state.pendingDialog.payload}
-                  game={state.game}
-                  onRespond={handleDialogRespond}
-                />
-              )}
+          <div className="game-sidebar">
+            {state.pendingDialog && (
+              <DialogPrompt
+                type={state.pendingDialog.type}
+                payload={state.pendingDialog.payload}
+                game={game}
+                onRespond={handleDialogRespond}
+                onHover={setHoveredCard}
+              />
+            )}
 
-              {(visibleMessages.length > 0 || tableTalk) && (
-                <div className="message-log">
-                  <div className="message-log-title">Game Log</div>
-                  {visibleMessages.length > 0 && (
-                    <div className="message-log-entries">
-                      {visibleMessages.slice(-30).map((msg, i) => (
-                        <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
-                          {msg.text}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {tableTalk && (
-                    <form className="chat-input" onSubmit={handleSendChat}>
-                      <input
-                        type="text"
-                        value={chatDraft}
-                        onChange={(e) => setChatDraft(e.target.value)}
-                        placeholder="Say something…"
-                        maxLength={280}
-                      />
-                      <button type="submit" disabled={!chatDraft.trim()}>
-                        Send
-                      </button>
-                    </form>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+            {/* Reference info, not action-needed like the dialog above - moved here
+                (out of the main board column) purely to save vertical space, since
+                that column was already the taller one. */}
+            {game.players?.map((player) => (
+              <CommandZone
+                key={player.playerId}
+                commandList={player.commandList}
+                playerName={player.name}
+                onCardClick={player.playerId === game.myPlayerId ? handlePlayCard : undefined}
+                playableIds={player.playerId === game.myPlayerId ? playableIds : undefined}
+                onHover={setHoveredCard}
+              />
+            ))}
+            <Exile exiles={game.exiles} onHover={setHoveredCard} />
+
+            {(visibleMessages.length > 0 || tableTalk) && (
+              <div className="message-log">
+                <div className="message-log-title">Game Log</div>
+                {visibleMessages.length > 0 && (
+                  <div className="message-log-entries">
+                    {visibleMessages.slice(-30).map((msg, i) => (
+                      <div key={i} className={`message-log-entry${msg.isTalk ? " talk" : ""}${msg.text.startsWith("⚠ ") ? " error" : ""}`}>
+                        {msg.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {tableTalk && (
+                  <form className="chat-input" onSubmit={handleSendChat}>
+                    <input
+                      type="text"
+                      value={chatDraft}
+                      onChange={(e) => setChatDraft(e.target.value)}
+                      placeholder="Say something…"
+                      maxLength={280}
+                    />
+                    <button type="submit" disabled={!chatDraft.trim()}>
+                      Send
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {state.gameOver && <GameOverBanner message={state.gameOver} onPlayAgain={handlePlayAgain} />}
+
+      {zoomedCard && <CardZoom card={zoomedCard} />}
 
       {showAccountModal && (
         <AccountModal
