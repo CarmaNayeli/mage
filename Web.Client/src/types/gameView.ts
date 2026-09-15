@@ -49,8 +49,14 @@ export interface PlayableObjects {
   objects: Record<UUID, PlayableObjectStats>;
 }
 
-/** Each array holds {id, value} pairs - id is the ability id to respond with via
- * send_uuid (NOT the card's own id), value is a display label ("Play Forest"). */
+/**
+ * Keyed by card id - each array holds {id, value} pairs describing ways to play that
+ * card (id here is a distinct ability id, value a display label like "Play Forest").
+ * Useful for knowing WHAT's playable (e.g. to highlight hand cards), but NOT for how
+ * to play it: confirmed against a real local game that the response send_uuid needs
+ * is the card's own id, not any of these ability ids - sending an ability id from
+ * here silently did nothing (canPlayObjects stayed unchanged, nothing left hand).
+ */
 export interface PlayableObjectStats {
   basicManaAbilities: PlayableAbility[];
   basicPlayAbilities: PlayableAbility[];
@@ -61,19 +67,6 @@ export interface PlayableObjectStats {
 export interface PlayableAbility {
   id: UUID;
   value: string;
-}
-
-/** Given a hand/battlefield card's id, resolves the ability id a send_uuid response
- * actually needs to play/cast it - confirmed real: canPlayObjects is keyed by card
- * id, but each entry's ability lists carry a DIFFERENT id (the ability itself) that
- * the server expects back, not the card's own id. Checked in play > cast > other >
- * mana order; mana abilities are unlikely to matter for a hand-card click but are
- * included for completeness. */
-export function resolvePlayAbilityId(game: GameView, cardId: UUID): UUID | null {
-  const stats = game.canPlayObjects?.objects[cardId];
-  if (!stats) return null;
-  const ability = stats.basicPlayAbilities[0] ?? stats.basicCastAbilities[0] ?? stats.other[0] ?? stats.basicManaAbilities[0];
-  return ability?.id ?? null;
 }
 
 /** A CardsView is a Map<UUID, CardView> on the Java side - id-keyed, not an array. */

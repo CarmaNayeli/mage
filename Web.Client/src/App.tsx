@@ -5,7 +5,7 @@ import { Board } from "./components/Board";
 import { DialogPrompt } from "./components/DialogPrompt";
 import { GameOverBanner } from "./components/GameOverBanner";
 import { DeckEntry } from "./preGame/DeckEntry";
-import { resolvePlayAbilityId, type CardView } from "./types/gameView";
+import type { CardView } from "./types/gameView";
 import { useGatewayConnection } from "./ws/useGatewayConnection";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "ws://localhost:8080";
@@ -52,14 +52,12 @@ function App() {
   };
 
   const handlePlayCard = (card: CardView) => {
-    // Confirmed against a real canPlayObjects dump: the response the server expects
-    // is the ABILITY id (e.g. "Play Forest"), not the card's own id - sending the
-    // card id directly doesn't play it.
-    if (!state.game) return;
-    const abilityId = resolvePlayAbilityId(state.game, card.id);
-    if (abilityId) {
-      send("send_uuid", [abilityId]);
-    }
+    // Confirmed against a real local game: the card's own id is what actually plays
+    // it (verified: a Mountain landed on the battlefield). An earlier attempt to
+    // resolve a separate "ability id" out of canPlayObjects was a wrong guess that
+    // silently did nothing - canPlayObjects is still useful for knowing what's
+    // playable, just not for this.
+    send("send_uuid", [card.id]);
   };
 
   const handlePlayAgain = () => {
