@@ -317,12 +317,17 @@
  * stacked below everything else (a full page of scrolling to see it, and it used to
  * shove the dialog down into overlapping the hand before the dialog became a normal-
  * flow element - see .dialog-prompt above). Wraps to a single column once the sidebar
- * can't fit at a reasonable width. */
+ * can't fit at a reasonable width.
+ *
+ * align-items: center (not flex-start) - the sidebar (Turn Tracker + Log) is almost
+ * always much shorter than the board column beside it; centering it in that leftover
+ * height reads far better than it pinned to the top with a long stretch of empty
+ * space below. .game-main is the taller column in practice, so this doesn't move it. */
 .game-layout {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .game-main {
