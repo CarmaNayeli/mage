@@ -9,25 +9,31 @@ primary_region = 'iad'
 [build]
 
 # Browsers only ever speak WSS to the gateway's WebSocket port (8080) - Fly's proxy
-# terminates TLS and forwards the WS upgrade over plain HTTP internally, which
-# http_service handles natively. Raw JBoss Remoting (17171) is NOT exposed here at
-# all anymore - only the gateway process inside the container talks to it, over
-# 127.0.0.1, so it has no reason to be reachable from outside.
-[http_service]
+# terminates TLS (via the "tls" handler below) and forwards plain HTTP/WS traffic to
+# the container. Raw JBoss Remoting (17171) is NOT exposed here at all - only the
+# gateway process inside the container talks to it, over 127.0.0.1.
+#
+# [[services]] + tcp_checks, not [http_service]: an http_service health check here
+# got a flat "connection refused" from Fly's own checker despite the process being
+# confirmed listening and answering real HTTP requests on 127.0.0.1:8080 (verified via
+# `fly ssh console` + curl) - some http_service-specific check-routing issue. This is
+# the same [[services]]/tcp_checks pattern that already proved out working earlier
+# (transitioned cleanly to "passing" when checking port 17171), just pointed at 8080
+# with TLS handlers added for wss://.
+[[services]]
+  protocol = 'tcp'
   internal_port = 8080
-  force_https = true
-  auto_stop_machines = false
-  auto_start_machines = true
-  min_machines_running = 1
 
-  # A plain TCP check, not an HTTP one: GatewayServer is a WebSocket-only server, it
-  # doesn't answer arbitrary HTTP GETs the way a real web server would. This also
-  # binds instantly on boot (unlike 17171, which only opens after Mage.Server's
-  # multi-minute first-run card-database rebuild) - health checks pass almost
-  # immediately instead of racing that rebuild, sidestepping the health-check
-  # grace-period issues hit when 17171 was the checked port.
-  [[http_service.checks]]
-    type = 'tcp'
+  [[services.ports]]
+    port = 443
+    handlers = ['tls', 'http']
+
+  [[services.ports]]
+    port = 80
+    handlers = ['http']
+    force_https = true
+
+  [[services.tcp_checks]]
     interval = '15s'
     timeout = '10s'
     grace_period = '30s'
