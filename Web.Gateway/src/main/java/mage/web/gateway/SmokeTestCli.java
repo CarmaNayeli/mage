@@ -71,7 +71,11 @@ public final class SmokeTestCli {
         Connection connection = new Connection();
         connection.setHost(host);
         connection.setPort(port);
-        connection.setUsername("WebGatewaySmokeTest");
+        // config.xml constraints: max 14 chars, [^a-z0-9_] is the invalid-character
+        // pattern - no uppercase. "WebGatewaySmokeTest" violated both and got silently
+        // rejected by connectUser (confirmed via the deployed smoke test's own
+        // "Failed to connect/log in." with no further detail).
+        connection.setUsername("gatewaysmoke");
         connection.setPassword("");
         connection.setProxyType(Connection.ProxyType.NONE);
         connection.setUserData(defaultUserData());
