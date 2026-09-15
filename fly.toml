@@ -1,0 +1,27 @@
+# Fly.io app config for the Phase 1 smoke test: Mage.Server + Web.Gateway in one
+# container (see Dockerfile). This is deliberately NOT a production topology - it's
+# the fastest way to get a real Maven build + real running server behind a reachable
+# address, since this environment has no local Maven/Docker to verify against directly.
+#
+# app name is a placeholder - `fly launch` will ask to confirm or change it if taken.
+app = "xmage-llm-practice"
+primary_region = "iad"
+
+[build]
+
+[[services]]
+  internal_port = 17171
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 17171
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "5m" # first boot builds the card database - can take a while
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 1

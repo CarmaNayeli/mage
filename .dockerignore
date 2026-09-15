@@ -1,0 +1,10 @@
+.git
+**/target
+.env
+*.log
+Mage.Tests/db
+Mage.Tests/gamesHistory
+Mage.Tests/saved
+.idea
+*.iml
+node_modules

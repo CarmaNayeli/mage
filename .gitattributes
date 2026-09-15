@@ -1,0 +1,2 @@
+# Shell scripts run inside the Linux Docker image - CRLF would break them (e.g. "set -e\r").
+*.sh text eol=lf
