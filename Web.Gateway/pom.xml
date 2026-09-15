@@ -27,6 +27,17 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- The actual card implementations (every real card - creatures, spells,
+                 etc.) live here, NOT in mage-common/mage. Confirmed the hard way: any
+                 non-basic-land card failed with ClassNotFoundException (e.g.
+                 mage.cards.s.Shock) at CardImpl.createCard() when this dependency was
+                 missing - basic lands alone worked because their classes live in the
+                 core `mage` module, already pulled in transitively via mage-common. -->
+            <groupId>${project.groupId}</groupId>
+            <artifactId>mage-sets</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
         </dependency>
