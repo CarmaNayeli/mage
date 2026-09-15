@@ -1,40 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { isAutoPassablePriority } from "./autoPass";
+import { getAutoPassResponse } from "./autoPass";
 
-describe("isAutoPassablePriority", () => {
-  it("is false for non-GAME_SELECT dialogs", () => {
-    expect(isAutoPassablePriority("GAME_ASK", { message: "Mulligan?" })).toBe(false);
+describe("getAutoPassResponse", () => {
+  it("is null (a real question) for non-GAME_SELECT dialogs", () => {
+    expect(getAutoPassResponse("GAME_ASK", { message: "Mulligan?" })).toBeNull();
   });
 
-  it("is true for a plain priority window with an empty canPlayObjects", () => {
+  it("answers false for a plain priority window with an empty canPlayObjects", () => {
     expect(
-      isAutoPassablePriority("GAME_SELECT", {
+      getAutoPassResponse("GAME_SELECT", {
         gameView: { canPlayObjects: { objects: {} } },
-        message: "Play spells and abilities",
-      } as never),
-    ).toBe(true);
-  });
-
-  it("is true when canPlayObjects itself is missing/null", () => {
-    expect(isAutoPassablePriority("GAME_SELECT", { message: "Play spells and abilities" })).toBe(true);
-  });
-
-  it("is false when something is actually playable", () => {
-    expect(
-      isAutoPassablePriority("GAME_SELECT", {
-        gameView: { canPlayObjects: { objects: { "card-1": {} } } },
         message: "Play spells and abilities",
       } as never),
     ).toBe(false);
   });
 
-  it("is false for a combat selection (declaring 0 attackers/blockers is still a real confirmation)", () => {
+  it("answers false when canPlayObjects itself is missing/null", () => {
+    expect(getAutoPassResponse("GAME_SELECT", { message: "Play spells and abilities" })).toBe(false);
+  });
+
+  it("is null (a real question) when something is actually playable", () => {
     expect(
-      isAutoPassablePriority("GAME_SELECT", {
+      getAutoPassResponse("GAME_SELECT", {
+        gameView: { canPlayObjects: { objects: { "card-1": {} } } },
+        message: "Play spells and abilities",
+      } as never),
+    ).toBeNull();
+  });
+
+  it("answers true (Done, nothing declared) for a combat selection with zero legal attackers/blockers", () => {
+    expect(
+      getAutoPassResponse("GAME_SELECT", {
         gameView: { canPlayObjects: { objects: {} } },
         message: "Select attackers",
         options: { possibleAttackers: [] },
       } as never),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      getAutoPassResponse("GAME_SELECT", {
+        gameView: { canPlayObjects: { objects: {} } },
+        message: "Select blockers",
+        options: { possibleBlockers: [] },
+      } as never),
+    ).toBe(true);
+  });
+
+  it("is null (a real question) for a combat selection with at least one legal attacker/blocker", () => {
+    expect(
+      getAutoPassResponse("GAME_SELECT", {
+        gameView: { canPlayObjects: { objects: {} } },
+        message: "Select attackers",
+        options: { possibleAttackers: ["creature-1"] },
+      } as never),
+    ).toBeNull();
   });
 });

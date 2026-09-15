@@ -64,6 +64,22 @@ describe("gameReducer", () => {
     expect(next.pendingDialog).toBeNull();
   });
 
+  it("does not surface a declare-attackers/blockers dialog (auto-answered Done instead) when there's nothing legal to declare", () => {
+    const payload = { gameView: { canPlayObjects: { objects: {} } }, message: "Select attackers", options: { possibleAttackers: [] } };
+    const next = gameReducer(initialGameState, envelope("GAME_SELECT", payload));
+    expect(next.pendingDialog).toBeNull();
+  });
+
+  it("still surfaces a declare-attackers/blockers dialog when at least one is legal", () => {
+    const payload = {
+      gameView: { canPlayObjects: { objects: {} } },
+      message: "Select attackers",
+      options: { possibleAttackers: ["creature-1"] },
+    };
+    const next = gameReducer(initialGameState, envelope("GAME_SELECT", payload));
+    expect(next.pendingDialog).toEqual({ type: "GAME_SELECT", payload });
+  });
+
   it("adopts a dialog's embedded gameView (e.g. GAME_ASK's mulligan prompt fires right after hands are dealt)", () => {
     const dealtHand = { turn: 1, phase: "PRECOMBAT_MAIN", players: [], myHand: { c1: { id: "c1", name: "Plains" } } } as unknown as GameView;
     const next = gameReducer(initialGameState, envelope("GAME_ASK", { gameView: dealtHand, message: "Mulligan?" }));

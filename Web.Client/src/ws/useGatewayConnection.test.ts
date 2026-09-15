@@ -103,6 +103,44 @@ describe("useGatewayConnection", () => {
     expect(result.current.state.pendingDialog?.type).toBe("GAME_SELECT");
   });
 
+  it("auto-answers Done (true) for a declare-attackers/blockers prompt with zero legal options, instead of surfacing it as a dialog", () => {
+    const { result } = renderHook(() => useGatewayConnection("ws://test"));
+    act(() => MockWebSocket.instances[0].triggerOpen());
+    act(() =>
+      MockWebSocket.instances[0].triggerMessage({
+        type: "GAME_SELECT",
+        objectId: null,
+        data: {
+          gameView: { canPlayObjects: { objects: {} } },
+          message: "Select attackers",
+          options: { possibleAttackers: [] },
+        },
+      }),
+    );
+
+    expect(MockWebSocket.instances[0].sent).toEqual([JSON.stringify({ call: "send_boolean", args: [true] })]);
+    expect(result.current.state.pendingDialog).toBeNull();
+  });
+
+  it("still surfaces a declare-attackers/blockers prompt when at least one is legal", () => {
+    const { result } = renderHook(() => useGatewayConnection("ws://test"));
+    act(() => MockWebSocket.instances[0].triggerOpen());
+    act(() =>
+      MockWebSocket.instances[0].triggerMessage({
+        type: "GAME_SELECT",
+        objectId: null,
+        data: {
+          gameView: { canPlayObjects: { objects: {} } },
+          message: "Select attackers",
+          options: { possibleAttackers: ["creature-1"] },
+        },
+      }),
+    );
+
+    expect(MockWebSocket.instances[0].sent).toEqual([]);
+    expect(result.current.state.pendingDialog?.type).toBe("GAME_SELECT");
+  });
+
   it("closes the socket on unmount", () => {
     const { unmount } = renderHook(() => useGatewayConnection("ws://test"));
     const socket = MockWebSocket.instances[0];
