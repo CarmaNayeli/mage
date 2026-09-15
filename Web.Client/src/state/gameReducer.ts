@@ -60,8 +60,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case "envelope": {
       const { type, data } = action.envelope;
 
-      if (type === "GAME_UPDATE" || type === "GAME_UPDATE_AND_INFORM" || type === "GAME_INIT" || type === "START_GAME") {
+      // GAME_UPDATE/GAME_INIT's payload IS a bare GameView. GAME_UPDATE_AND_INFORM's
+      // is NOT - it's a GameClientMessage wrapping one under `.gameView` (confirmed:
+      // treating it as bare crashed the real client with "players is undefined",
+      // since the wrapper has no top-level `players` field). START_GAME's payload
+      // isn't a GameView at all - just table/game id metadata - so it must NOT be
+      // adopted as game state (same crash risk if it arrived after a real GameView
+      // and got treated as the current board).
+      if (type === "GAME_UPDATE" || type === "GAME_INIT") {
         return { ...state, game: data as GameView };
+      }
+      if (type === "GAME_UPDATE_AND_INFORM") {
+        const gameView = (data as { gameView?: GameView } | null)?.gameView;
+        return gameView ? { ...state, game: gameView } : state;
       }
 
       if (DIALOG_TYPES.has(type)) {

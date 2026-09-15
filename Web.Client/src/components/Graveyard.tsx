@@ -6,7 +6,7 @@ interface GraveyardProps {
 }
 
 export function Graveyard({ cards }: GraveyardProps) {
-  const list = Object.values(cards);
+  const list = Object.values(cards ?? {});
   if (list.length === 0) {
     return null;
   }

@@ -6,7 +6,7 @@ interface StackProps {
 }
 
 export function Stack({ cards }: StackProps) {
-  const list = Object.values(cards);
+  const list = Object.values(cards ?? {});
   if (list.length === 0) {
     return null;
   }

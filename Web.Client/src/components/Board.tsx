@@ -11,8 +11,12 @@ interface BoardProps {
 }
 
 export function Board({ game, onPlayCard }: BoardProps) {
-  const me = game.players.find((p) => p.playerId === game.myPlayerId);
-  const opponents = game.players.filter((p) => p.playerId !== game.myPlayerId);
+  // Defensive: every payload shape assumed here has already been wrong once for real
+  // (GAME_UPDATE_AND_INFORM's wrapper crashed this exact line in production) - a
+  // missing/malformed field should degrade gracefully, not take the whole app down.
+  const players = game.players ?? [];
+  const me = players.find((p) => p.playerId === game.myPlayerId);
+  const opponents = players.filter((p) => p.playerId !== game.myPlayerId);
 
   return (
     <div className="board">

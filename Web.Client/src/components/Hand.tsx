@@ -7,7 +7,7 @@ interface HandProps {
 }
 
 export function Hand({ cards, onCardClick }: HandProps) {
-  const list = Object.values(cards);
+  const list = Object.values(cards ?? {});
 
   return (
     <div className="hand">

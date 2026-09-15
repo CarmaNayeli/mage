@@ -6,7 +6,7 @@ interface BattlefieldProps {
 }
 
 export function Battlefield({ cards }: BattlefieldProps) {
-  const list = Object.values(cards);
+  const list = Object.values(cards ?? {});
   const lands = list.filter((c) => c.cardTypes?.includes(LAND_CARD_TYPE));
   const nonLands = list.filter((c) => !c.cardTypes?.includes(LAND_CARD_TYPE));
 

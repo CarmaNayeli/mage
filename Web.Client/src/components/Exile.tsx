@@ -6,18 +6,21 @@ interface ExileProps {
 }
 
 export function Exile({ exiles }: ExileProps) {
-  const nonEmpty = exiles.filter((exile) => Object.keys(exile.cards).length > 0);
+  // ExileView's real shape is still unconfirmed (observed as [{}] - empty objects -
+  // in every real dump so far, nothing was ever exiled during that playtest), so
+  // this stays defensive rather than trusting `id`/`name`/`cards` to be present.
+  const nonEmpty = (exiles ?? []).filter((exile) => Object.keys(exile?.cards ?? {}).length > 0);
   if (nonEmpty.length === 0) {
     return null;
   }
 
   return (
     <div className="exile">
-      {nonEmpty.map((exileZone) => (
-        <div key={exileZone.id} className="exile-zone">
+      {nonEmpty.map((exileZone, i) => (
+        <div key={exileZone.id ?? i} className="exile-zone">
           <span className="zone-label">{exileZone.name || "Exile"}</span>
           <div className="exile-cards">
-            {Object.values(exileZone.cards).map((card) => (
+            {Object.values(exileZone.cards ?? {}).map((card) => (
               <CardTile key={card.id} card={card} />
             ))}
           </div>

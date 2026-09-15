@@ -23,13 +23,23 @@ describe("gameReducer", () => {
     expect(connected.connectionStatus).toBe("connected");
   });
 
-  it.each(["GAME_UPDATE", "GAME_UPDATE_AND_INFORM", "GAME_INIT", "START_GAME"])(
-    "adopts the payload as game state on %s",
-    (type) => {
-      const next = gameReducer(initialGameState, envelope(type, minimalGameView));
-      expect(next.game).toEqual(minimalGameView);
-    },
-  );
+  it.each(["GAME_UPDATE", "GAME_INIT"])("adopts the bare GameView payload as game state on %s", (type) => {
+    const next = gameReducer(initialGameState, envelope(type, minimalGameView));
+    expect(next.game).toEqual(minimalGameView);
+  });
+
+  it("unwraps GAME_UPDATE_AND_INFORM's nested gameView instead of adopting the wrapper", () => {
+    const wrapped = { gameView: minimalGameView, message: "Bot casts Lightning Bolt" };
+    const next = gameReducer(initialGameState, envelope("GAME_UPDATE_AND_INFORM", wrapped));
+    expect(next.game).toEqual(minimalGameView);
+  });
+
+  it("does not touch game state on START_GAME - its payload isn't a GameView", () => {
+    const midGame = gameReducer(initialGameState, envelope("GAME_INIT", minimalGameView));
+    const startGamePayload = { gameId: "g1", currentTableId: "t1", playerId: "p1" };
+    const next = gameReducer(midGame, envelope("START_GAME", startGamePayload));
+    expect(next.game).toEqual(minimalGameView);
+  });
 
   it.each(["GAME_TARGET", "GAME_CHOOSE_ABILITY", "GAME_ASK", "GAME_SELECT", "GAME_PLAY_MANA", "GAME_GET_AMOUNT"])(
     "surfaces a dialog on %s",
