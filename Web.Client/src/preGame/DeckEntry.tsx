@@ -41,28 +41,40 @@ const FORMATS: Array<{ id: string; label: string }> = [
   { id: "commander", label: "Commander" },
 ];
 
+/** TxtDeckImporter (as Web.Gateway's DeckSubmission calls it) switches everything
+ * after the first blank line to the sideboard automatically - no special syntax
+ * needed, just a real blank line. That's the only way it recognizes a commander. */
+function withSideboard(deckText: string, sideboardText: string): string {
+  return sideboardText.trim() ? `${deckText}\n\n${sideboardText}` : deckText;
+}
+
 export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProps) {
   const [playerName, setPlayerName] = useState("");
   const [format, setFormat] = useState("freeform");
   const [playerDeck, setPlayerDeck] = useState("");
+  const [sideboard, setSideboard] = useState("");
   const [opponentMode, setOpponentMode] = useState<OpponentMode>("basic");
   const [opponentDeck, setOpponentDeck] = useState("");
+  const [opponentSideboard, setOpponentSideboard] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
 
+  const isCommander = format === "commander";
   const needsOpponentDeck = opponentMode === "provide";
   const canSubmit =
     playerName.trim().length > 0 &&
     playerDeck.trim().length > 0 &&
+    (!isCommander || sideboard.trim().length > 0) &&
     (!needsOpponentDeck || opponentDeck.trim().length > 0) &&
+    (!needsOpponentDeck || !isCommander || opponentSideboard.trim().length > 0) &&
     !disabled;
 
   const handleSubmit = () => {
     onSubmit({
       playerName: playerName.trim(),
       format,
-      playerDeck,
+      playerDeck: withSideboard(playerDeck, sideboard),
       opponentMode,
-      opponentDeck: needsOpponentDeck ? opponentDeck : undefined,
+      opponentDeck: needsOpponentDeck ? withSideboard(opponentDeck, opponentSideboard) : undefined,
       difficulty: opponentMode === "counter" ? difficulty : undefined,
     });
   };
@@ -105,7 +117,18 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
               value={playerDeck}
               onChange={(e) => setPlayerDeck(e.target.value)}
               placeholder={PLACEHOLDER}
-              rows={14}
+              rows={12}
+              disabled={disabled}
+            />
+          </label>
+          <label className="deck-entry-field">
+            Sideboard{isCommander ? " (required)" : " (optional)"}
+            {isCommander && <span className="deck-entry-hint">Drop your commander here.</span>}
+            <textarea
+              value={sideboard}
+              onChange={(e) => setSideboard(e.target.value)}
+              placeholder={isCommander ? "1 Krenko, Mob Boss" : "Sideboard cards, if any"}
+              rows={3}
               disabled={disabled}
             />
           </label>
@@ -150,16 +173,29 @@ export function DeckEntry({ onSubmit, disabled, error, progress }: DeckEntryProp
           </div>
 
           {opponentMode === "provide" && (
-            <label className="deck-entry-field">
-              Decklist
-              <textarea
-                value={opponentDeck}
-                onChange={(e) => setOpponentDeck(e.target.value)}
-                placeholder={PLACEHOLDER}
-                rows={14}
-                disabled={disabled}
-              />
-            </label>
+            <>
+              <label className="deck-entry-field">
+                Decklist
+                <textarea
+                  value={opponentDeck}
+                  onChange={(e) => setOpponentDeck(e.target.value)}
+                  placeholder={PLACEHOLDER}
+                  rows={12}
+                  disabled={disabled}
+                />
+              </label>
+              <label className="deck-entry-field">
+                Sideboard{isCommander ? " (required)" : " (optional)"}
+                {isCommander && <span className="deck-entry-hint">Drop the commander here.</span>}
+                <textarea
+                  value={opponentSideboard}
+                  onChange={(e) => setOpponentSideboard(e.target.value)}
+                  placeholder={isCommander ? "1 Krenko, Mob Boss" : "Sideboard cards, if any"}
+                  rows={3}
+                  disabled={disabled}
+                />
+              </label>
+            </>
           )}
 
           {opponentMode === "counter" && (

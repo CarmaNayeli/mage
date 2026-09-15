@@ -57,18 +57,81 @@ describe("DeckEntry", () => {
     );
   });
 
+  it("leaves the sideboard optional, and joins it with a blank line, for non-Commander formats", () => {
+    const onSubmit = vi.fn();
+    render(<DeckEntry onSubmit={onSubmit} />);
+    fillForm("Carma", "20 Mountain");
+    expect(screen.getByRole("button", { name: "Start game" })).not.toBeDisabled();
+
+    const sideboards = screen.getAllByLabelText(/^Sideboard/);
+    fireEvent.change(sideboards[0], { target: { value: "4 Shock" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ playerDeck: "20 Mountain\n\n4 Shock" }),
+    );
+  });
+
   it("submits the selected format and difficulty for the counter-deck mode", () => {
     const onSubmit = vi.fn();
     render(<DeckEntry onSubmit={onSubmit} />);
     fillForm("Carma", "20 Mountain");
 
     fireEvent.change(screen.getByLabelText("Format"), { target: { value: "commander" } });
+    fireEvent.change(screen.getAllByLabelText(/^Sideboard/)[0], { target: { value: "1 Krenko, Mob Boss" } });
     fireEvent.click(screen.getByRole("radio", { name: "Analyze my deck and build a counter" }));
     fireEvent.change(screen.getByLabelText("Difficulty"), { target: { value: "hard" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
     expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ format: "commander", opponentMode: "counter", difficulty: "hard" }),
+      expect.objectContaining({
+        format: "commander",
+        opponentMode: "counter",
+        difficulty: "hard",
+        playerDeck: "20 Mountain\n\n1 Krenko, Mob Boss",
+      }),
+    );
+  });
+
+  it("requires a non-empty sideboard for Commander format, with a hint to drop the commander there", () => {
+    const onSubmit = vi.fn();
+    render(<DeckEntry onSubmit={onSubmit} />);
+    fillForm("Carma", "99 Island");
+    fireEvent.change(screen.getByLabelText("Format"), { target: { value: "commander" } });
+
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+    expect(screen.getAllByText(/drop your commander here/i)[0]).toBeInTheDocument();
+
+    fireEvent.change(screen.getAllByLabelText(/^Sideboard/)[0], { target: { value: "1 Krenko, Mob Boss" } });
+    expect(screen.getByRole("button", { name: "Start game" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ playerDeck: "99 Island\n\n1 Krenko, Mob Boss" }),
+    );
+  });
+
+  it("also requires the opponent's sideboard when providing a Commander deck", () => {
+    const onSubmit = vi.fn();
+    render(<DeckEntry onSubmit={onSubmit} />);
+    fillForm("Carma", "99 Island");
+    fireEvent.change(screen.getByLabelText("Format"), { target: { value: "commander" } });
+    fireEvent.change(screen.getAllByLabelText(/^Sideboard/)[0], { target: { value: "1 Krenko, Mob Boss" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Provide a deck" }));
+
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+
+    const textareas = screen.getAllByLabelText("Decklist");
+    fireEvent.change(textareas[1], { target: { value: "99 Plains" } });
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+
+    const sideboards = screen.getAllByLabelText(/^Sideboard/);
+    fireEvent.change(sideboards[1], { target: { value: "1 Isperia, Supreme Judge" } });
+    expect(screen.getByRole("button", { name: "Start game" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ opponentDeck: "99 Plains\n\n1 Isperia, Supreme Judge" }),
     );
   });
 

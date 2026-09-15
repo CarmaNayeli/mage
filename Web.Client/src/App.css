@@ -173,6 +173,13 @@
   font-size: 0.9rem;
 }
 
+.deck-entry-hint {
+  margin: -4px 0 0;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 .deck-entry-progress {
   color: var(--text);
   font-size: 0.85rem;
