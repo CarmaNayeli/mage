@@ -8,6 +8,10 @@ Mage.Tests/saved
 *.iml
 node_modules
 
+# Separate npm project (React frontend) - not part of the Docker/Maven backend build
+# at all, but its node_modules made the upload-to-builder context balloon to 88MB.
+Web.Client
+
 # Maven build-output directories only - NOT **/target, which also matches the real
 # mage.target Java package (Mage/src/main/java/mage/target: Target, Targets,
 # TargetPointer, TargetAdjuster, etc.) and silently breaks the whole compile.
